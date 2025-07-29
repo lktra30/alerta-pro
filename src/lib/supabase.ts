@@ -82,7 +82,7 @@ export async function getMetas() {
 
   const { data, error } = await supabase
     .from('metas')
-    .select('*')
+    .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
     .order('ano', { ascending: false })
     .order('mes', { ascending: false })
   
@@ -544,7 +544,7 @@ export async function getCurrentMonthMeta() {
 
     const { data: meta, error } = await supabase
       .from('metas')
-      .select('*')
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .eq('ano', currentYear)
       .eq('mes', currentMonth)
       .single()
@@ -680,7 +680,7 @@ export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
     // Test if the table exists and is accessible
     const { error: testError } = await supabase
       .from('metas')
-      .select('*')
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .limit(1)
     
     if (testError) {
@@ -691,7 +691,7 @@ export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
     // First try to update existing record
     const { data: existingMeta, error: fetchError } = await supabase
       .from('metas')
-      .select('*')
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .eq('ano', ano)
       .eq('mes', mes)
       .single()
@@ -716,7 +716,7 @@ export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
       .upsert(upsertData, {
         onConflict: 'ano,mes'
       })
-      .select()
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .single()
 
     if (error) {
@@ -747,7 +747,7 @@ export async function upsertMetaCloser(ano: number, mes: number, valor_meta: num
     // First try to update existing record
     const { data: existingMeta, error: fetchError } = await supabase
       .from('metas')
-      .select('*')
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .eq('ano', ano)
       .eq('mes', mes)
       .single()
@@ -772,7 +772,7 @@ export async function upsertMetaCloser(ano: number, mes: number, valor_meta: num
       .upsert(upsertData, {
         onConflict: 'ano,mes'
       })
-      .select()
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .single()
 
     if (error) {
@@ -805,7 +805,7 @@ export async function upsertMetaSdr(ano: number, mes: number, valor_meta: number
     // First try to update existing record
     const { data: existingMeta, error: fetchError } = await supabase
       .from('metas')
-      .select('*')
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .eq('ano', ano)
       .eq('mes', mes)
       .single()
@@ -830,7 +830,7 @@ export async function upsertMetaSdr(ano: number, mes: number, valor_meta: number
       .upsert(upsertData, {
         onConflict: 'ano,mes'
       })
-      .select()
+      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
       .single()
 
     if (error) {

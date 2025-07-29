@@ -13,8 +13,8 @@ export interface Cliente {
   telefone?: string
   empresa?: string
   origem?: string
-  sdr_id?: string
-  closer_id?: string
+  sdr_id?: string // UUID as string
+  closer_id?: string // UUID as string
   valor_venda?: number
   data_fechamento?: string
   etapa: EtapaEnum
@@ -30,9 +30,6 @@ export interface Meta {
   valor_meta: number
   meta_closer?: number
   meta_sdr?: number
-  meta_diaria?: number
-  criado_em: string
-  atualizado_em: string
 }
 
 export interface Sdr {
@@ -67,8 +64,8 @@ export interface Database {
       }
       metas: {
         Row: Meta
-        Insert: Omit<Meta, 'id' | 'criado_em' | 'atualizado_em'>
-        Update: Partial<Omit<Meta, 'id' | 'criado_em' | 'atualizado_em'>>
+        Insert: Omit<Meta, 'id'>
+        Update: Partial<Omit<Meta, 'id'>>
       }
     }
     Views: Record<string, never>
