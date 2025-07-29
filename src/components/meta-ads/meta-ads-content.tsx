@@ -94,7 +94,7 @@ export function MetaAdsContent() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-2">
-        <h1 className="text-3xl font-bold text-yellow-500">Meta Ads Performance</h1>
+        <h1 className="text-3xl font-bold text-green-500">Meta Ads Performance</h1>
         <p className="text-muted-foreground">
           Acompanhe o desempenho dos seus anúncios no Facebook e Instagram
         </p>

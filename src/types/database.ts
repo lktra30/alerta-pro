@@ -27,7 +27,7 @@ export interface Meta {
   id: number
   ano: number
   mes: number
-  meta_comercial: number
+  valor_meta: number
   meta_closer?: number
   meta_sdr?: number
   meta_diaria?: number

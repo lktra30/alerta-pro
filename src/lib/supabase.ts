@@ -564,7 +564,15 @@ export async function getCurrentMonthMeta() {
       return { valor_meta: 800000, ano: currentYear, mes: currentMonth }
     }
     
-    return meta
+    console.log('Meta data from database:', meta)
+    console.log('Meta keys:', Object.keys(meta))
+    
+    // Return the meta object with the correct valor_meta field
+    return {
+      valor_meta: meta.valor_meta || 800000,
+      ano: meta.ano,
+      mes: meta.mes
+    }
   } catch (error) {
     console.error('Error in getCurrentMonthMeta:', error)
     return { valor_meta: 800000, ano: 2025, mes: 7 } // Default values
@@ -669,6 +677,17 @@ export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
   }
 
   try {
+    // Test if the table exists and is accessible
+    const { error: testError } = await supabase
+      .from('metas')
+      .select('*')
+      .limit(1)
+    
+    if (testError) {
+      console.error('Error accessing metas table:', testError)
+      return { success: false, error: `Table access error: ${testError.message}` }
+    }
+
     // First try to update existing record
     const { data: existingMeta, error: fetchError } = await supabase
       .from('metas')
@@ -682,24 +701,32 @@ export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
       return { success: false, error: fetchError.message }
     }
 
+    const upsertData = {
+      ano,
+      mes,
+      valor_meta: valor_meta,
+      meta_closer: existingMeta?.meta_closer || 0,
+      meta_sdr: existingMeta?.meta_sdr || 0
+    }
+
+    console.log('Upserting meta with data:', upsertData)
+
     const { data, error } = await supabase
       .from('metas')
-      .upsert({
-        ano,
-        mes,
-        meta_comercial: valor_meta,
-        meta_closer: existingMeta?.meta_closer || 0,
-        meta_sdr: existingMeta?.meta_sdr || 0,
-        meta_diaria: existingMeta?.meta_diaria || 0
-      }, {
+      .upsert(upsertData, {
         onConflict: 'ano,mes'
       })
       .select()
       .single()
 
     if (error) {
-      console.error('Error upserting meta:', error)
-      return { success: false, error: error.message }
+      console.error('Error upserting meta - Full error object:', JSON.stringify(error, null, 2))
+      console.error('Error upserting meta - Error type:', typeof error)
+      console.error('Error upserting meta - Error keys:', Object.keys(error))
+      console.error('Error upserting meta - Upsert data:', upsertData)
+      
+      const errorMessage = error.message || 'Unknown database error - check console for details'
+      return { success: false, error: errorMessage }
     }
 
     return { success: true, data }
@@ -730,24 +757,34 @@ export async function upsertMetaCloser(ano: number, mes: number, valor_meta: num
       return { success: false, error: fetchError.message }
     }
 
+    const upsertData = {
+      ano,
+      mes,
+      valor_meta: existingMeta?.valor_meta || 0,
+      meta_closer: valor_meta,
+      meta_sdr: existingMeta?.meta_sdr || 0
+    }
+
+    console.log('Upserting meta closer with data:', upsertData)
+
     const { data, error } = await supabase
       .from('metas')
-      .upsert({
-        ano,
-        mes,
-        meta_comercial: existingMeta?.meta_comercial || 0,
-        meta_closer: valor_meta,
-        meta_sdr: existingMeta?.meta_sdr || 0,
-        meta_diaria: existingMeta?.meta_diaria || 0
-      }, {
+      .upsert(upsertData, {
         onConflict: 'ano,mes'
       })
       .select()
       .single()
 
     if (error) {
-      console.error('Error upserting meta closer:', error)
-      return { success: false, error: error.message }
+      console.error('Error upserting meta closer:', {
+        error,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorDetails: error.details,
+        errorHint: error.hint,
+        upsertData
+      })
+      return { success: false, error: error.message || 'Unknown database error' }
     }
 
     return { success: true, data }
@@ -778,24 +815,34 @@ export async function upsertMetaSdr(ano: number, mes: number, valor_meta: number
       return { success: false, error: fetchError.message }
     }
 
+    const upsertData = {
+      ano,
+      mes,
+      valor_meta: existingMeta?.valor_meta || 0,
+      meta_closer: existingMeta?.meta_closer || 0,
+      meta_sdr: valor_meta
+    }
+
+    console.log('Upserting meta SDR with data:', upsertData)
+
     const { data, error } = await supabase
       .from('metas')
-      .upsert({
-        ano,
-        mes,
-        meta_comercial: existingMeta?.meta_comercial || 0,
-        meta_closer: existingMeta?.meta_closer || 0,
-        meta_sdr: valor_meta,
-        meta_diaria: existingMeta?.meta_diaria || 0
-      }, {
+      .upsert(upsertData, {
         onConflict: 'ano,mes'
       })
       .select()
       .single()
 
     if (error) {
-      console.error('Error upserting meta SDR:', error)
-      return { success: false, error: error.message }
+      console.error('Error upserting meta SDR:', {
+        error,
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorDetails: error.details,
+        errorHint: error.hint,
+        upsertData
+      })
+      return { success: false, error: error.message || 'Unknown database error' }
     }
 
     return { success: true, data }

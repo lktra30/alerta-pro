@@ -1,7 +1,7 @@
 import { MetaAdsData, MetaAdsMetrics, MonthlyInvestment } from "@/types/meta-ads"
 
 const FACEBOOK_API_BASE = "https://graph.facebook.com/v23.0"
-const AD_ACCOUNT_ID = "act_1021480798184024"
+const AD_ACCOUNT_ID = "act_2457879687702026"
 
 export class MetaAdsService {
   private accessToken: string

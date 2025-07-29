@@ -52,7 +52,7 @@ export function SalesFunnelChart() {
       {/* Sales Funnel (All) */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-amber-500">Funil de Vendas (Todos)</CardTitle>
+          <CardTitle className="text-green-500">Funil de Vendas (Todos)</CardTitle>
           <CardDescription>Pipeline de vendas completo</CardDescription>
         </CardHeader>
         <CardContent>

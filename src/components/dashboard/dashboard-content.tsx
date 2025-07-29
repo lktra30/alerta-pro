@@ -99,7 +99,7 @@ export function DashboardContent() {
           { name: "João Silva", value: 45000, sales: 8 },
           { name: "Maria Santos", value: 32000, sales: 6 }
         ])
-        setCurrentMeta({ id: 0, meta_comercial: 800000, ano: 2025, mes: 7, criado_em: '', atualizado_em: '' })
+        setCurrentMeta({ id: 0, valor_meta: 800000, ano: 2025, mes: 7, criado_em: '', atualizado_em: '' })
         setDailySales(4250)
         setDailyGoal(26667)
         return
@@ -114,7 +114,7 @@ export function DashboardContent() {
 
       setStats(dashboardStats)
       setTopPerformers(performers)
-      setCurrentMeta(metaData)
+      setCurrentMeta(metaData as Meta)
       setDailySales(dailyData.dailySales)
       setDailyGoal(dailyData.dailyGoal)
     } catch (error) {
@@ -190,7 +190,7 @@ export function DashboardContent() {
   }
 
   // Calculate meta values
-  const metaComercial = currentMeta?.meta_comercial || 0
+  const metaComercial = currentMeta?.valor_meta || 0
   const progressoMeta = metaComercial > 0 ? (stats.valorTotal / metaComercial) * 100 : 0
   const metaDiaria = metaComercial / 30 // Rough daily goal
   const progressoDiario = dailyGoal > 0 ? (dailySales / dailyGoal) * 100 : 0

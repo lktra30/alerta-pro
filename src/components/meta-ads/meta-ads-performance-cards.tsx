@@ -22,14 +22,14 @@ export function MetaAdsPerformanceCards({ metrics, isLoading }: MetaAdsPerforman
   const cards = [
     {
       title: "Total Investido",
-      value: `R$ ${metrics.totalInvestido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      value: `R$ ${metrics.totalInvestido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       subtitle: "em anúncios",
       icon: DollarSign,
       iconColor: "text-green-500"
     },
     {
       title: "Investimento por Lead",
-      value: `R$ ${metrics.investimentoPorLead.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      value: `R$ ${metrics.investimentoPorLead.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       subtitle: "por lead",
       icon: Target,
       iconColor: "text-green-600"
@@ -43,7 +43,7 @@ export function MetaAdsPerformanceCards({ metrics, isLoading }: MetaAdsPerforman
     },
     {
       title: "CPC Médio",
-      value: `R$ ${metrics.cpcMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      value: `R$ ${metrics.cpcMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       subtitle: `${(metrics.alcance * 0.05).toFixed(0)} cliques`,
       icon: MousePointer,
       iconColor: "text-green-600"
