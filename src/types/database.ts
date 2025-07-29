@@ -1,10 +1,9 @@
 export type EtapaEnum = 
-  | 'Prospecção'
-  | 'Contato Feito'
-  | 'Reunião Agendada'
-  | 'Proposta Enviada'
-  | 'Fechado - Ganhou'
-  | 'Fechado - Perdido'
+  | 'Lead'
+  | 'Leads Qualificados'
+  | 'Agendados'
+  | 'Reunioes Feitas'
+  | 'Vendas Realizadas'
 
 export interface Cliente {
   id: number
@@ -53,6 +52,13 @@ export interface User {
   role?: 'SDR' | 'Closer' | 'Admin'
 }
 
+export interface Colaborador {
+  id: number
+  created_at: string
+  nome: string
+  funcao: string
+}
+
 // Database types for Supabase
 export interface Database {
   public: {
@@ -66,6 +72,11 @@ export interface Database {
         Row: Meta
         Insert: Omit<Meta, 'id'>
         Update: Partial<Omit<Meta, 'id'>>
+      }
+      colaboradores: {
+        Row: Colaborador
+        Insert: Omit<Colaborador, 'id' | 'created_at'>
+        Update: Partial<Omit<Colaborador, 'id' | 'created_at'>>
       }
     }
     Views: Record<string, never>

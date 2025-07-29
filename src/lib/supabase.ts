@@ -124,7 +124,7 @@ export async function getDashboardStats() {
     }
   }
 
-  const vendasFechadas = clientes.filter(c => c.etapa === 'Fechado - Ganhou')
+  const vendasFechadas = clientes.filter(c => c.etapa === 'Vendas Realizadas')
   const clientesAtivos = clientes.filter(c => !c.etapa.includes('Fechado'))
   const valorTotal = vendasFechadas.reduce((sum, c) => sum + (c.valor_venda || 0), 0)
   const ticketMedio = vendasFechadas.length > 0 ? valorTotal / vendasFechadas.length : 0
@@ -149,7 +149,7 @@ export async function getTopPerformers() {
   const { data: clientes, error } = await supabase
     .from('clientes')
     .select('*')
-    .eq('etapa', 'Fechado - Ganhou')
+    .eq('etapa', 'Vendas Realizadas')
   
   if (error || !clientes) {
     console.error('Error fetching top performers:', error)
@@ -198,7 +198,7 @@ export async function getDailySales() {
     const { data: clientes, error } = await supabase
       .from('clientes')
       .select('valor_venda, data_fechamento, atualizado_em')
-      .eq('etapa', 'Fechado - Ganhou')
+      .eq('etapa', 'Vendas Realizadas')
     
     if (error) {
       console.error('Error fetching daily sales:', error)
@@ -242,7 +242,7 @@ export async function getMonthlySalesData() {
     const { data: clientes, error } = await supabase
       .from('clientes')
       .select('valor_venda, data_fechamento, atualizado_em')
-      .eq('etapa', 'Fechado - Ganhou')
+      .eq('etapa', 'Vendas Realizadas')
     
     if (error) {
       console.error('Error fetching monthly sales data:', error)
@@ -310,7 +310,7 @@ export async function getMonthlySalesSummary() {
     const { data: clientes, error } = await supabase
       .from('clientes')
       .select('valor_venda, data_fechamento, atualizado_em')
-      .eq('etapa', 'Fechado - Ganhou')
+      .eq('etapa', 'Vendas Realizadas')
     
     if (error) {
       console.error('Error fetching monthly sales summary:', error)
@@ -401,12 +401,11 @@ export async function getFunnelData() {
 
     // Count clients by stage
     const stageCounts = {
-      'Prospecção': 0,
-      'Contato Feito': 0,
-      'Reunião Agendada': 0,
-      'Proposta Enviada': 0,
-      'Fechado - Ganhou': 0,
-      'Fechado - Perdido': 0
+      'Lead': 0,
+      'Leads Qualificados': 0,
+      'Agendados': 0,
+      'Reunioes Feitas': 0,
+      'Vendas Realizadas': 0
     }
 
     clientes.forEach(cliente => {
@@ -416,9 +415,10 @@ export async function getFunnelData() {
     })
 
     const totalLeads = clientes.length
-    const activeLeads = totalLeads - stageCounts['Fechado - Ganhou'] - stageCounts['Fechado - Perdido']
-    const meetings = stageCounts['Reunião Agendada'] + stageCounts['Proposta Enviada']
-    const sales = stageCounts['Fechado - Ganhou']
+    const leadsQualificados = stageCounts['Leads Qualificados']
+    const agendados = stageCounts['Agendados']
+    const reunioesFeitas = stageCounts['Reunioes Feitas']
+    const vendasRealizadas = stageCounts['Vendas Realizadas']
 
     return [
       {
@@ -428,22 +428,28 @@ export async function getFunnelData() {
         color: "#22c55e"
       },
       {
-        stage: "Reuniões",
-        value: meetings,
-        percentage: totalLeads > 0 ? (meetings / totalLeads) * 100 : 0,
+        stage: "Leads Qualificados",
+        value: leadsQualificados,
+        percentage: totalLeads > 0 ? (leadsQualificados / totalLeads) * 100 : 0,
         color: "#16a34a"
       },
       {
-        stage: "Vendas",
-        value: sales,
-        percentage: totalLeads > 0 ? (sales / totalLeads) * 100 : 0,
+        stage: "Agendados",
+        value: agendados,
+        percentage: totalLeads > 0 ? (agendados / totalLeads) * 100 : 0,
         color: "#15803d"
       },
       {
-        stage: "Follow",
-        value: activeLeads,
-        percentage: totalLeads > 0 ? (activeLeads / totalLeads) * 100 : 0,
+        stage: "Reuniões Feitas",
+        value: reunioesFeitas,
+        percentage: totalLeads > 0 ? (reunioesFeitas / totalLeads) * 100 : 0,
         color: "#166534"
+      },
+      {
+        stage: "Vendas Realizadas",
+        value: vendasRealizadas,
+        percentage: totalLeads > 0 ? (vendasRealizadas / totalLeads) * 100 : 0,
+        color: "#14532d"
       }
     ]
   } catch (error) {
@@ -500,17 +506,17 @@ export async function getLeadsEvolutionData() {
         monthData.leadsTotal++
         
         // Count qualified leads (beyond first contact)
-        if (!['Prospecção', 'Fechado - Perdido'].includes(cliente.etapa)) {
+        if (['Leads Qualificados', 'Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
           monthData.leadsQualificados++
         }
         
         // Count meetings scheduled
-        if (['Reunião Agendada', 'Proposta Enviada', 'Fechado - Ganhou'].includes(cliente.etapa)) {
+        if (['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
           monthData.reunioesMarcadas++
         }
         
         // Count sales
-        if (cliente.etapa === 'Fechado - Ganhou') {
+        if (cliente.etapa === 'Vendas Realizadas') {
           monthData.vendas++
         }
       } catch {
@@ -922,6 +928,101 @@ export async function updateCliente(id: number, clienteData: {
     return { success: true, data }
   } catch (error) {
     console.error('Error in updateCliente:', error)
+    return { success: false, error: 'Unknown error occurred' }
+  }
+}
+
+// Colaboradores functions
+export async function getColaboradores() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from('colaboradores')
+    .select('*')
+    .order('created_at', { ascending: false })
+  
+  if (error) {
+    console.error('Error fetching colaboradores:', error)
+    return []
+  }
+  
+  return data
+}
+
+export async function createColaborador(colaborador: { nome: string; funcao: string }) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return { success: false, error: 'Supabase not configured' }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('colaboradores')
+      .insert([colaborador])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating colaborador:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error in createColaborador:', error)
+    return { success: false, error: 'Unknown error occurred' }
+  }
+}
+
+export async function updateColaborador(id: number, updates: { nome?: string; funcao?: string }) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return { success: false, error: 'Supabase not configured' }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('colaboradores')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error updating colaborador:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error in updateColaborador:', error)
+    return { success: false, error: 'Unknown error occurred' }
+  }
+}
+
+export async function deleteColaborador(id: number) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return { success: false, error: 'Supabase not configured' }
+  }
+
+  try {
+    const { error } = await supabase
+      .from('colaboradores')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error deleting colaborador:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error in deleteColaborador:', error)
     return { success: false, error: 'Unknown error occurred' }
   }
 }

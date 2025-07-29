@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { EditGoalsPopover } from "./edit-goals-popover"
+// import { EditGoalsPopover } from "./edit-goals-popover"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -32,7 +32,7 @@ const sidebarItems = [
   {
     title: "Comissão",
     icon: DollarSign,
-    badge: null,
+    badge: 'Espera',
     href: "/comissao"
   },
   {
@@ -42,7 +42,7 @@ const sidebarItems = [
     href: "/crm"
   },
   {
-    title: "Configurations",
+    title: "Configurações",
     icon: Settings,
     badge: null,
     href: "/configuracoes"
@@ -101,25 +101,12 @@ export function DashboardSidebar() {
             </li>
           ))}
           
-          {/* Special Edit Goals Item */}
+          {/* Special Edit Goals Item
           <li>
             <EditGoalsPopover />
-          </li>
+          </li> */}
         </ul>
       </nav>
-
-      {/* Footer */}
-      <div className="border-t p-4">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-            <span className="text-sm font-medium">JD</span>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium">John Doe</p>
-            <p className="text-xs text-muted-foreground">john@example.com</p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

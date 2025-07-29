@@ -39,28 +39,25 @@ import { NovoClienteCard } from "./novo-cliente-card"
 import { ClienteDetailsCard } from "./cliente-details-card"
 
 const etapas: EtapaEnum[] = [
-  'Prospecção',
-  'Contato Feito', 
-  'Reunião Agendada',
-  'Proposta Enviada',
-  'Fechado - Ganhou',
-  'Fechado - Perdido'
+  'Lead',
+  'Leads Qualificados', 
+  'Agendados',
+  'Reunioes Feitas',
+  'Vendas Realizadas'
 ]
 
 const getEtapaColor = (etapa: EtapaEnum) => {
   switch (etapa) {
-    case 'Prospecção':
+    case 'Lead':
       return 'text-gray-600'
-    case 'Contato Feito':
+    case 'Leads Qualificados':
       return 'text-blue-600'
-    case 'Reunião Agendada':
+    case 'Agendados':
       return 'text-yellow-600'
-    case 'Proposta Enviada':
+    case 'Reunioes Feitas':
       return 'text-purple-600'
-    case 'Fechado - Ganhou':
+    case 'Vendas Realizadas':
       return 'text-green-600'
-    case 'Fechado - Perdido':
-      return 'text-red-600'
     default:
       return 'text-gray-600'
   }
@@ -148,10 +145,10 @@ export function CRMPage() {
 
   // Calculate statistics
   const totalClientes = clientes.length
-  const clientesAtivos = clientes.filter(c => !c.etapa.includes('Fechado')).length
-  const vendasFechadas = clientes.filter(c => c.etapa === 'Fechado - Ganhou').length
+  const clientesAtivos = clientes.filter(c => c.etapa !== 'Vendas Realizadas').length
+  const vendasFechadas = clientes.filter(c => c.etapa === 'Vendas Realizadas').length
   const valorTotalVendas = clientes
-    .filter(c => c.etapa === 'Fechado - Ganhou')
+    .filter(c => c.etapa === 'Vendas Realizadas')
     .reduce((sum, c) => sum + (c.valor_venda || 0), 0)
 
   return (

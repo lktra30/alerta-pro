@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, Users, Target, CheckCircle2 } from "lucide-react"
+import { TrendingUp, Users, Target, CheckCircle2, Calendar } from "lucide-react"
 import { getFunnelData, isSupabaseConfigured } from "@/lib/supabase"
 
 interface FunnelStage {
@@ -14,9 +14,10 @@ interface FunnelStage {
 
 const stageIcons = {
   "Leads": Users,
-  "Reuniões": Target,
-  "Vendas": TrendingUp,
-  "Follow": CheckCircle2
+  "Leads Qualificados": Target,
+  "Agendados": Calendar,
+  "Reuniões Feitas": CheckCircle2,
+  "Vendas Realizadas": TrendingUp
 }
 
 export function SalesFunnelChart() {
@@ -138,7 +139,7 @@ export function SalesFunnelChart() {
                     <span className="text-sm font-medium">Leads Qualificados</span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {funnelData.find(stage => stage.stage === 'Reuniões')?.value || 0}
+                    {funnelData.find(stage => stage.stage === 'Reuniões Feitas')?.value || 0}
                   </span>
                 </div>
                 
@@ -148,14 +149,14 @@ export function SalesFunnelChart() {
                 >
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-green-700 font-semibold text-sm">
-                      {funnelData.find(stage => stage.stage === 'Reuniões')?.value || 0} leads qualificados
+                      {funnelData.find(stage => stage.stage === 'Reuniões Feitas')?.value || 0} reuniões realizadas
                     </span>
                   </div>
                 </div>
                 
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {((funnelData.find(stage => stage.stage === 'Vendas')?.value || 0) / 
-                    Math.max(funnelData.find(stage => stage.stage === 'Reuniões')?.value || 1, 1) * 100).toFixed(1)}% de conversão
+                  {((funnelData.find(stage => stage.stage === 'Vendas Realizadas')?.value || 0) / 
+                    Math.max(funnelData.find(stage => stage.stage === 'Reuniões Feitas')?.value || 1, 1) * 100).toFixed(1)}% de conversão
                 </div>
               </div>
               

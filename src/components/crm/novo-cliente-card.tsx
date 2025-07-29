@@ -30,12 +30,11 @@ interface NovoClienteForm {
 }
 
 const etapas: EtapaEnum[] = [
-  'Prospecção',
-  'Contato Feito',
-  'Reunião Agendada',
-  'Proposta Enviada',
-  'Fechado - Ganhou',
-  'Fechado - Perdido'
+  'Lead',
+  'Leads Qualificados',
+  'Agendados',
+  'Reunioes Feitas',
+  'Vendas Realizadas'
 ]
 
 const origens = [
@@ -68,7 +67,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
     origem: '',
     sdr_id: '',
     closer_id: '',
-    etapa: 'Prospecção',
+    etapa: 'Lead',
     endereco: '',
     valor_venda: ''
   })
@@ -115,7 +114,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
       origem: '',
       sdr_id: '',
       closer_id: '',
-      etapa: 'Prospecção',
+      etapa: 'Lead',
       endereco: '',
       valor_venda: ''
     })

@@ -35,12 +35,11 @@ interface NovoClienteForm {
 }
 
 const etapas: EtapaEnum[] = [
-  'Prospecção',
-  'Contato Feito',
-  'Reunião Agendada',
-  'Proposta Enviada',
-  'Fechado - Ganhou',
-  'Fechado - Perdido'
+  'Lead',
+  'Leads Qualificados',
+  'Agendados',
+  'Reunioes Feitas',
+  'Vendas Realizadas'
 ]
 
 const origens = [
@@ -68,7 +67,7 @@ export function NovoClientePopover() {
     origem: '',
     sdr_id: '',
     closer_id: '',
-    etapa: 'Prospecção',
+    etapa: 'Lead',
     endereco: '',
     valor_venda: ''
   })
@@ -104,7 +103,7 @@ export function NovoClientePopover() {
       origem: '',
       sdr_id: '',
       closer_id: '',
-      etapa: 'Prospecção',
+      etapa: 'Lead',
       endereco: '',
       valor_venda: ''
     })

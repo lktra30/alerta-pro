@@ -31,12 +31,11 @@ interface ClienteForm {
 }
 
 const etapas: EtapaEnum[] = [
-  'Prospecção',
-  'Contato Feito',
-  'Reunião Agendada',
-  'Proposta Enviada',
-  'Fechado - Ganhou',
-  'Fechado - Perdido'
+  'Lead',
+  'Leads Qualificados',
+  'Agendados',
+  'Reunioes Feitas',
+  'Vendas Realizadas'
 ]
 
 const origens = [
@@ -55,18 +54,16 @@ const origens = [
 
 const getEtapaColor = (etapa: EtapaEnum) => {
   switch (etapa) {
-    case 'Prospecção':
+    case 'Lead':
       return 'bg-gray-100 text-gray-800'
-    case 'Contato Feito':
+    case 'Leads Qualificados':
       return 'bg-blue-100 text-blue-800'
-    case 'Reunião Agendada':
+    case 'Agendados':
       return 'bg-yellow-100 text-yellow-800'
-    case 'Proposta Enviada':
+    case 'Reunioes Feitas':
       return 'bg-purple-100 text-purple-800'
-    case 'Fechado - Ganhou':
+    case 'Vendas Realizadas':
       return 'bg-green-100 text-green-800'
-    case 'Fechado - Perdido':
-      return 'bg-red-100 text-red-800'
     default:
       return 'bg-gray-100 text-gray-800'
   }
@@ -90,7 +87,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     origem: '',
     sdr_id: '',
     closer_id: '',
-    etapa: 'Prospecção',
+    etapa: 'Lead',
     endereco: '',
     valor_venda: ''
   })

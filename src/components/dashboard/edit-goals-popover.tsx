@@ -186,7 +186,7 @@ export function EditGoalsPopover() {
           className="w-full justify-start gap-3 h-10 hover:bg-secondary"
         >
           <Target className="h-4 w-4" />
-          <span className="flex-1 text-left">Editar Metas</span>
+          <span className="text-left">Editar Metas</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96 p-0" side="right" align="start">
