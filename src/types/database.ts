@@ -12,8 +12,8 @@ export interface Cliente {
   telefone?: string
   empresa?: string
   origem?: string
-  sdr_id?: string // UUID as string
-  closer_id?: string // UUID as string
+  sdr_id?: number // Colaborador ID as number
+  closer_id?: number // Colaborador ID as number
   valor_venda?: number
   data_fechamento?: string
   etapa: EtapaEnum

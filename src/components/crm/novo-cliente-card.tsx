@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Save, X, Loader2 } from "lucide-react"
-import { createCliente, isSupabaseConfigured } from "@/lib/supabase"
-import type { EtapaEnum } from "@/types/database"
+import { createCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache } from "@/lib/supabase"
+import type { EtapaEnum, Colaborador } from "@/types/database"
 
 interface NovoClienteForm {
   nome: string
@@ -22,8 +22,8 @@ interface NovoClienteForm {
   telefone: string
   empresa: string
   origem: string
-  sdr_id: string
-  closer_id: string
+  sdr_id: string // Mantemos como string no formulário para compatibilidade com Select
+  closer_id: string // Mantemos como string no formulário para compatibilidade com Select
   etapa: EtapaEnum
   endereco: string
   valor_venda?: number | string
@@ -49,8 +49,6 @@ const origens = [
   'Outros'
 ]
 
-// SDR and Closer names are now stored directly as strings in the database
-
 interface NovoClienteCardProps {
   onClienteAdicionado?: () => void
   isOpen: boolean
@@ -59,6 +57,7 @@ interface NovoClienteCardProps {
 
 export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: NovoClienteCardProps) {
   const [loading, setLoading] = useState(false)
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [form, setForm] = useState<NovoClienteForm>({
     nome: '',
     email: '',
@@ -71,6 +70,15 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
     endereco: '',
     valor_venda: ''
   })
+
+  // Load colaboradores when component mounts
+  useEffect(() => {
+    const loadColaboradores = async () => {
+      const data = await getColaboradores()
+      setColaboradores(data)
+    }
+    loadColaboradores()
+  }, [])
 
   // Debug log when component mounts
   useEffect(() => {
@@ -120,6 +128,17 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
     })
   }
 
+  // Filter colaboradores by function
+  const sdrColaboradores = colaboradores.filter(col => 
+    col.funcao.toLowerCase().includes('sdr') || 
+    col.funcao.toLowerCase() === 'sdr'
+  )
+  
+  const closerColaboradores = colaboradores.filter(col => 
+    col.funcao.toLowerCase().includes('closer') || 
+    col.funcao.toLowerCase() === 'closer'
+  )
+
   const handleCancel = () => {
     resetForm()
     onOpenChange(false)
@@ -151,20 +170,62 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         telefone: form.telefone.trim() || null,
         empresa: form.empresa.trim() || null,
         origem: form.origem || null,
-        sdr_id: form.sdr_id || null,
-        closer_id: form.closer_id || null,
+        sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
+        closer_id: form.closer_id ? parseInt(form.closer_id) : null,
         etapa: form.etapa,
         endereco: form.endereco.trim() || null,
         valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
       })
 
       if (!result.success) {
+        // If it's a schema cache error, try refreshing and retrying
+        if (result.error?.includes('PGRST204') || result.error?.includes('schema cache')) {
+          console.log('Schema cache error detected. Attempting to refresh...')
+          const refreshed = await refreshSchemaCache()
+          
+          if (refreshed) {
+            // Retry the creation after refreshing cache
+            const retryResult = await createCliente({
+              nome: form.nome.trim(),
+              email: form.email.trim() || null,
+              telefone: form.telefone.trim() || null,
+              empresa: form.empresa.trim() || null,
+              origem: form.origem || null,
+              sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
+              closer_id: form.closer_id ? parseInt(form.closer_id) : null,
+              etapa: form.etapa,
+              endereco: form.endereco.trim() || null,
+              valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
+            })
+            
+            if (!retryResult.success) {
+              alert(`Erro ao criar cliente: ${retryResult.error}`)
+              return
+            }
+            
+            console.log('Cliente criado com sucesso após refresh do cache:', retryResult.data)
+            alert('Cliente criado com sucesso!')
+            resetForm()
+            onOpenChange(false)
+            onClienteAdicionado?.()
+            window.dispatchEvent(new CustomEvent('clienteAdicionado'))
+            return
+          }
+        }
+        
         alert(`Erro ao criar cliente: ${result.error}`)
         return
       }
 
+      // Check if there was a warning (partial success)
+      if ('warning' in result && result.warning) {
+        console.warn('Warning during creation:', result.warning)
+        alert(`Cliente criado com aviso: ${result.warning}`)
+      } else {
+        alert('Cliente criado com sucesso!')
+      }
+
       console.log('Cliente criado com sucesso:', result.data)
-      alert('Cliente criado com sucesso!')
       resetForm()
       onOpenChange(false)
       onClienteAdicionado?.()
@@ -292,24 +353,44 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
 
                 <div>
                   <Label htmlFor="sdr">SDR</Label>
-                  <Input
-                    id="sdr"
-                    value={form.sdr_id}
-                    onChange={(e) => handleInputChange('sdr_id', e.target.value)}
-                    placeholder="Nome do SDR"
+                  <Select
+                    value={form.sdr_id || "none"}
+                    onValueChange={(value) => handleInputChange('sdr_id', value === "none" ? "" : value)}
                     disabled={loading}
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um SDR" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[1003]">
+                      <SelectItem value="none">Nenhum SDR</SelectItem>
+                      {sdrColaboradores.map((colaborador) => (
+                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                          {colaborador.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
                   <Label htmlFor="closer">Closer</Label>
-                  <Input
-                    id="closer"
-                    value={form.closer_id}
-                    onChange={(e) => handleInputChange('closer_id', e.target.value)}
-                    placeholder="Nome do Closer"
+                  <Select
+                    value={form.closer_id || "none"}
+                    onValueChange={(value) => handleInputChange('closer_id', value === "none" ? "" : value)}
                     disabled={loading}
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um Closer" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[1003]">
+                      <SelectItem value="none">Nenhum Closer</SelectItem>
+                      {closerColaboradores.map((colaborador) => (
+                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                          {colaborador.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>

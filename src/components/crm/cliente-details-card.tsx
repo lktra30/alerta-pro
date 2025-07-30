@@ -14,8 +14,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Eye, Edit, Save, X, Loader2, User, Mail, Phone, Building, MapPin, DollarSign } from "lucide-react"
-import { updateCliente, isSupabaseConfigured } from "@/lib/supabase"
-import { Cliente, EtapaEnum } from "@/types/database"
+import { updateCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache } from "@/lib/supabase"
+import { Cliente, EtapaEnum, Colaborador } from "@/types/database"
 
 interface ClienteForm {
   nome: string
@@ -23,8 +23,8 @@ interface ClienteForm {
   telefone: string
   empresa: string
   origem: string
-  sdr_id: string
-  closer_id: string
+  sdr_id: string // Mantemos como string no formulário para compatibilidade com Select
+  closer_id: string // Mantemos como string no formulário para compatibilidade com Select
   etapa: EtapaEnum
   endereco: string
   valor_venda?: number | string
@@ -49,8 +49,6 @@ const origens = [
   'Evento',
   'Outros'
 ]
-
-// SDR and Closer names are now stored directly as strings in the database
 
 const getEtapaColor = (etapa: EtapaEnum) => {
   switch (etapa) {
@@ -79,6 +77,7 @@ interface ClienteDetailsCardProps {
 export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpdated }: ClienteDetailsCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [form, setForm] = useState<ClienteForm>({
     nome: '',
     email: '',
@@ -101,14 +100,23 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         telefone: cliente.telefone || '',
         empresa: cliente.empresa || '',
         origem: cliente.origem || '',
-        sdr_id: cliente.sdr_id || '',
-        closer_id: cliente.closer_id || '',
+        sdr_id: cliente.sdr_id ? cliente.sdr_id.toString() : '',
+        closer_id: cliente.closer_id ? cliente.closer_id.toString() : '',
         etapa: cliente.etapa,
         endereco: cliente.endereco || '',
         valor_venda: cliente.valor_venda || ''
       })
     }
   }, [cliente])
+
+  // Load colaboradores when component mounts
+  useEffect(() => {
+    const loadColaboradores = async () => {
+      const data = await getColaboradores()
+      setColaboradores(data)
+    }
+    loadColaboradores()
+  }, [])
 
   const handleInputChange = (field: keyof ClienteForm, value: string | number) => {
     setForm(prev => ({
@@ -149,13 +157,28 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     })
   }
 
-  const getSdrName = (name: string | null | undefined) => {
-    return name || 'N/A'
+  const getSdrName = (id: number | null | undefined) => {
+    if (!id) return 'N/A'
+    const colaborador = colaboradores.find(col => col.id === id)
+    return colaborador ? colaborador.nome : 'N/A'
   }
 
-  const getCloserName = (name: string | null | undefined) => {
-    return name || 'N/A'
+  const getCloserName = (id: number | null | undefined) => {
+    if (!id) return 'N/A'
+    const colaborador = colaboradores.find(col => col.id === id)
+    return colaborador ? colaborador.nome : 'N/A'
   }
+
+  // Filter colaboradores by function
+  const sdrColaboradores = colaboradores.filter(col => 
+    col.funcao.toLowerCase().includes('sdr') || 
+    col.funcao.toLowerCase() === 'sdr'
+  )
+  
+  const closerColaboradores = colaboradores.filter(col => 
+    col.funcao.toLowerCase().includes('closer') || 
+    col.funcao.toLowerCase() === 'closer'
+  )
 
   const handleCancel = () => {
     setIsEditing(false)
@@ -167,8 +190,8 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         telefone: cliente.telefone || '',
         empresa: cliente.empresa || '',
         origem: cliente.origem || '',
-        sdr_id: cliente.sdr_id || '',
-        closer_id: cliente.closer_id || '',
+        sdr_id: cliente.sdr_id ? cliente.sdr_id.toString() : '',
+        closer_id: cliente.closer_id ? cliente.closer_id.toString() : '',
         etapa: cliente.etapa,
         endereco: cliente.endereco || '',
         valor_venda: cliente.valor_venda || ''
@@ -208,8 +231,8 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         telefone: form.telefone.trim() || null,
         empresa: form.empresa.trim() || null,
         origem: form.origem || null,
-        sdr_id: form.sdr_id || null,
-        closer_id: form.closer_id || null,
+        sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
+        closer_id: form.closer_id ? parseInt(form.closer_id) : null,
         etapa: form.etapa,
         endereco: form.endereco.trim() || null,
         valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
@@ -218,12 +241,39 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
       const result = await updateCliente(cliente.id, updateData)
 
       if (!result.success) {
+        // If it's a schema cache error, try refreshing and retrying
+        if (result.error?.includes('PGRST204') || result.error?.includes('schema cache')) {
+          console.log('Schema cache error detected. Attempting to refresh...')
+          const refreshed = await refreshSchemaCache()
+          
+          if (refreshed) {
+            // Retry the update after refreshing cache
+            const retryResult = await updateCliente(cliente.id, updateData)
+            if (!retryResult.success) {
+              alert(`Erro ao atualizar cliente: ${retryResult.error}`)
+              return
+            }
+            console.log('Cliente atualizado com sucesso após refresh do cache:', retryResult.data)
+            alert('Cliente atualizado com sucesso!')
+            setIsEditing(false)
+            onClienteUpdated?.()
+            return
+          }
+        }
+        
         alert(`Erro ao atualizar cliente: ${result.error}`)
         return
       }
 
+      // Check if there was a warning (partial success)
+      if ('warning' in result && result.warning) {
+        console.warn('Warning during update:', result.warning)
+        alert(`Cliente atualizado com aviso: ${result.warning}`)
+      } else {
+        alert('Cliente atualizado com sucesso!')
+      }
+
       console.log('Cliente atualizado com sucesso:', result.data)
-      alert('Cliente atualizado com sucesso!')
       setIsEditing(false)
       onClienteUpdated?.()
 
@@ -386,29 +436,47 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
                     </Select>
                   </div>
 
-                  <div>
-                    <Label htmlFor="sdr">SDR</Label>
-                    <Input
-                      id="sdr"
-                      value={form.sdr_id}
-                      onChange={(e) => handleInputChange('sdr_id', e.target.value)}
-                      placeholder="Nome do SDR"
-                      disabled={loading}
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="sdr">SDR</Label>
+                  <Select
+                    value={form.sdr_id || "none"}
+                    onValueChange={(value) => handleInputChange('sdr_id', value === "none" ? "" : value)}
+                    disabled={loading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um SDR" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[1003]">
+                      <SelectItem value="none">Nenhum SDR</SelectItem>
+                      {sdrColaboradores.map((colaborador) => (
+                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                          {colaborador.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  <div>
-                    <Label htmlFor="closer">Closer</Label>
-                    <Input
-                      id="closer"
-                      value={form.closer_id}
-                      onChange={(e) => handleInputChange('closer_id', e.target.value)}
-                      placeholder="Nome do Closer"
-                      disabled={loading}
-                    />
-                  </div>
-
-                  <div>
+                <div>
+                  <Label htmlFor="closer">Closer</Label>
+                  <Select
+                    value={form.closer_id || "none"}
+                    onValueChange={(value) => handleInputChange('closer_id', value === "none" ? "" : value)}
+                    disabled={loading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um Closer" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[1003]">
+                      <SelectItem value="none">Nenhum Closer</SelectItem>
+                      {closerColaboradores.map((colaborador) => (
+                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                          {colaborador.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>                  <div>
                     <Label htmlFor="etapa">Etapa</Label>
                     <Select
                       value={form.etapa}

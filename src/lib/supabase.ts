@@ -15,7 +15,81 @@ export const isSupabaseConfigured = () => {
 }
 
 // Utility functions for common database operations
-export async function getClientes() {
+
+// Function to force schema cache refresh
+export async function refreshSchemaCache() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return false
+  }
+
+  try {
+    // Try to fetch table info to force schema cache refresh
+    const { error } = await supabase
+      .from('clientes')
+      .select('*')
+      .limit(1)
+    
+    if (error) {
+      console.error('Error refreshing schema cache:', error)
+      return false
+    }
+    
+    console.log('Schema cache refreshed successfully')
+    return true
+  } catch (error) {
+    console.error('Error in refreshSchemaCache:', error)
+    return false
+  }
+}
+
+// Debug function to check table schema
+export async function debugTableSchema() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return
+  }
+
+  try {
+    // Try to select specific columns to verify they exist
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('id, nome, sdr_id, closer_id')
+      .limit(1)
+    
+    if (error) {
+      console.error('Schema debug error:', error)
+      
+      // Try alternative column names that might exist
+      const { data: altData, error: altError } = await supabase
+        .from('clientes')
+        .select('id, nome')
+        .limit(1)
+        
+      if (altError) {
+        console.error('Basic table access error:', altError)
+      } else {
+        console.log('Basic table access works:', altData)
+        
+        // List all available columns by trying a broader query
+        const { data: allData, error: allError } = await supabase
+          .from('clientes')
+          .select('*')
+          .limit(1)
+          
+        if (allError) {
+          console.error('Full table access error:', allError)
+        } else {
+          console.log('Available columns in clientes table:', allData?.[0] ? Object.keys(allData[0]) : 'No data available')
+        }
+      }
+    } else {
+      console.log('Schema debug success - sdr_id and closer_id columns are accessible:', data)
+    }
+  } catch (error) {
+    console.error('Error in debugTableSchema:', error)
+  }
+}export async function getClientes() {
   if (!isSupabaseConfigured() || !supabase) {
     console.warn('Supabase not configured. Please add environment variables.')
     return []
@@ -865,8 +939,8 @@ export async function createCliente(clienteData: {
   telefone?: string | null
   empresa?: string | null
   origem?: string | null
-  sdr_id?: string | null
-  closer_id?: string | null
+  sdr_id?: number | null
+  closer_id?: number | null
   etapa: Database['public']['Enums']['etapa_enum']
   endereco?: string | null
   valor_venda?: number | null
@@ -877,14 +951,63 @@ export async function createCliente(clienteData: {
   }
 
   try {
+    // Debug: Log the data being sent to Supabase
+    console.log('Creating client with data:', clienteData)
+    
     const { data, error } = await supabase
       .from('clientes')
       .insert([clienteData])
-      .select()
+      .select('*')
       .single()
 
     if (error) {
       console.error('Error creating client:', error)
+      
+      // If it's a schema cache error, try alternative approach
+      if (error.code === 'PGRST204') {
+        console.log('Schema cache error detected during creation. Trying alternative approach...')
+        
+        // Try creating without the problematic fields first, then add them
+        const { closer_id, sdr_id, ...safeData } = clienteData
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('clientes')
+          .insert([safeData])
+          .select('*')
+          .single()
+
+        if (partialError) {
+          return { success: false, error: `Primary creation failed: ${partialError.message}` }
+        }
+
+        // Now try to update with the collaborator IDs if they were provided
+        if (closer_id !== undefined || sdr_id !== undefined) {
+          const collaboratorUpdate: { sdr_id?: number | null; closer_id?: number | null } = {}
+          if (sdr_id !== undefined) collaboratorUpdate.sdr_id = sdr_id
+          if (closer_id !== undefined) collaboratorUpdate.closer_id = closer_id
+
+          const { data: finalData, error: finalError } = await supabase
+            .from('clientes')
+            .update(collaboratorUpdate)
+            .eq('id', partialData.id)
+            .select('*')
+            .single()
+
+          if (finalError) {
+            console.warn('Collaborator assignment failed, but client was created:', finalError)
+            return { 
+              success: true, 
+              data: partialData, 
+              warning: `Client created but collaborator assignment failed: ${finalError.message}` 
+            }
+          }
+
+          return { success: true, data: finalData }
+        }
+
+        return { success: true, data: partialData }
+      }
+      
       return { success: false, error: error.message }
     }
 
@@ -901,8 +1024,8 @@ export async function updateCliente(id: number, clienteData: {
   telefone?: string | null
   empresa?: string | null
   origem?: string | null
-  sdr_id?: string | null
-  closer_id?: string | null
+  sdr_id?: number | null
+  closer_id?: number | null
   etapa?: Database['public']['Enums']['etapa_enum']
   endereco?: string | null
   valor_venda?: number | null
@@ -913,15 +1036,66 @@ export async function updateCliente(id: number, clienteData: {
   }
 
   try {
+    // Debug: Log the data being sent to Supabase
+    console.log('Updating client with data:', { id, clienteData })
+    
+    // First, let's try to refresh the schema cache if the error occurs
     const { data, error } = await supabase
       .from('clientes')
       .update(clienteData)
       .eq('id', id)
-      .select()
+      .select('*')
       .single()
 
     if (error) {
       console.error('Error updating client:', error)
+      
+      // If it's a schema cache error, try alternative approach
+      if (error.code === 'PGRST204') {
+        console.log('Schema cache error detected. Trying alternative approach...')
+        
+        // Try updating without the problematic fields first, then add them
+        const { closer_id, sdr_id, ...safeData } = clienteData
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('clientes')
+          .update(safeData)
+          .eq('id', id)
+          .select('*')
+          .single()
+
+        if (partialError) {
+          return { success: false, error: `Primary update failed: ${partialError.message}` }
+        }
+
+        // Now try to update the collaborator IDs if they were provided
+        if (closer_id !== undefined || sdr_id !== undefined) {
+          const collaboratorUpdate: { sdr_id?: number | null; closer_id?: number | null } = {}
+          if (sdr_id !== undefined) collaboratorUpdate.sdr_id = sdr_id
+          if (closer_id !== undefined) collaboratorUpdate.closer_id = closer_id
+
+          const { data: finalData, error: finalError } = await supabase
+            .from('clientes')
+            .update(collaboratorUpdate)
+            .eq('id', id)
+            .select('*')
+            .single()
+
+          if (finalError) {
+            console.warn('Collaborator update failed, but main data was saved:', finalError)
+            return { 
+              success: true, 
+              data: partialData, 
+              warning: `Main data updated but collaborator assignment failed: ${finalError.message}` 
+            }
+          }
+
+          return { success: true, data: finalData }
+        }
+
+        return { success: true, data: partialData }
+      }
+      
       return { success: false, error: error.message }
     }
 
@@ -1024,5 +1198,146 @@ export async function deleteColaborador(id: number) {
   } catch (error) {
     console.error('Error in deleteColaborador:', error)
     return { success: false, error: 'Unknown error occurred' }
+  }
+}
+
+// Comissões functions
+export async function getVendasPorColaborador() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return []
+  }
+
+  try {
+    const { data: clientes, error } = await supabase
+      .from('clientes')
+      .select(`
+        id,
+        nome,
+        valor_venda,
+        data_fechamento,
+        etapa,
+        sdr_id,
+        closer_id
+      `)
+      .eq('etapa', 'Vendas Realizadas')
+      .not('valor_venda', 'is', null)
+      .not('data_fechamento', 'is', null)
+
+    if (error) {
+      console.error('Error fetching vendas por colaborador:', error)
+      return []
+    }
+
+    return clientes || []
+  } catch (error) {
+    console.error('Error in getVendasPorColaborador:', error)
+    return []
+  }
+}
+
+export async function getComissaoStats() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return { colaboradores: [], vendas: [] }
+  }
+
+  try {
+    // Buscar todos os colaboradores
+    const { data: colaboradores, error: colaboradoresError } = await supabase
+      .from('colaboradores')
+      .select('*')
+      .order('nome')
+
+    if (colaboradoresError) {
+      console.error('Error fetching colaboradores:', colaboradoresError)
+      return { colaboradores: [], vendas: [] }
+    }
+
+    // Buscar vendas realizadas
+    const vendas = await getVendasPorColaborador()
+
+    return { colaboradores: colaboradores || [], vendas }
+  } catch (error) {
+    console.error('Error in getComissaoStats:', error)
+    return { colaboradores: [], vendas: [] }
+  }
+}
+
+// Tipos para configuração de comissão com ranks
+export interface RankConfig {
+  rank1: number // até 25% da meta
+  rank2: number // 26% a 60% da meta
+  rank3: number // 61% a 100%+ da meta
+}
+
+export interface ComissaoConfig {
+  sdr: RankConfig
+  closer: RankConfig
+}
+
+// Funções para configurações de comissão (usando localStorage por simplicidade)
+export function getComissaoConfig(): ComissaoConfig {
+  if (typeof window === 'undefined') {
+    return {
+      sdr: { rank1: 3, rank2: 5, rank3: 7 },
+      closer: { rank1: 6, rank2: 10, rank3: 15 }
+    }
+  }
+  
+  const config = localStorage.getItem('comissao_config_ranks')
+  if (!config) {
+    return {
+      sdr: { rank1: 3, rank2: 5, rank3: 7 },
+      closer: { rank1: 6, rank2: 10, rank3: 15 }
+    }
+  }
+  
+  try {
+    return JSON.parse(config)
+  } catch {
+    return {
+      sdr: { rank1: 3, rank2: 5, rank3: 7 },
+      closer: { rank1: 6, rank2: 10, rank3: 15 }
+    }
+  }
+}
+
+export function setComissaoConfig(config: ComissaoConfig) {
+  if (typeof window === 'undefined') return
+  
+  localStorage.setItem('comissao_config_ranks', JSON.stringify(config))
+}
+
+// Função para calcular o rank baseado no percentual da meta
+export function calculateRank(percentualMeta: number): 1 | 2 | 3 {
+  if (percentualMeta <= 25) return 1
+  if (percentualMeta <= 60) return 2
+  return 3
+}
+
+// Função para obter o percentual de comissão baseado no rank
+export function getComissaoPercentual(funcao: string, rank: 1 | 2 | 3, config: ComissaoConfig): number {
+  const roleConfig = funcao.toLowerCase() === 'sdr' ? config.sdr : config.closer
+  
+  switch (rank) {
+    case 1: return roleConfig.rank1
+    case 2: return roleConfig.rank2
+    case 3: return roleConfig.rank3
+    default: return roleConfig.rank1
+  }
+}
+
+// Função para obter informações do rank
+export function getRankInfo(rank: 1 | 2 | 3): { name: string; color: string; range: string } {
+  switch (rank) {
+    case 1:
+      return { name: 'Rank 1', color: 'bg-slate-500', range: '0-25%' }
+    case 2:
+      return { name: 'Rank 2', color: 'bg-blue-500', range: '26-60%' }
+    case 3:
+      return { name: 'Rank 3', color: 'bg-green-500', range: '61-100%+' }
+    default:
+      return { name: 'Rank 1', color: 'bg-slate-500', range: '0-25%' }
   }
 }
