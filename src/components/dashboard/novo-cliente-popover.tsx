@@ -150,8 +150,8 @@ export function NovoClientePopover() {
         telefone: form.telefone.trim() || null,
         empresa: form.empresa.trim() || null,
         origem: form.origem || null,
-        sdr_id: form.sdr_id,
-        closer_id: form.closer_id,
+        sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
+        closer_id: form.closer_id ? parseInt(form.closer_id) : null,
         etapa: form.etapa,
         endereco: form.endereco.trim() || null,
         valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
