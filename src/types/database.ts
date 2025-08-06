@@ -5,6 +5,8 @@ export type EtapaEnum =
   | 'Reunioes Feitas'
   | 'Vendas Realizadas'
 
+export type TipoPlano = 'mensal' | 'trimestral' | 'semestral' | 'anual'
+
 export interface Cliente {
   id: number
   nome: string
@@ -15,6 +17,8 @@ export interface Cliente {
   sdr_id?: number // Colaborador ID as number
   closer_id?: number // Colaborador ID as number
   valor_venda?: number
+  valor_base_plano?: number // Valor base do plano vendido
+  tipo_plano?: TipoPlano // Tipo do plano vendido
   data_fechamento?: string
   etapa: EtapaEnum
   endereco?: string
@@ -22,10 +26,29 @@ export interface Cliente {
   atualizado_em: string
 }
 
+export interface Reuniao {
+  id: number
+  sdr_id: number
+  cliente_id?: number
+  tipo: 'qualificada' | 'gerou_venda'
+  data_reuniao: string
+  criado_em: string
+}
+
+export interface PlanoConfig {
+  mensal: { valor_base: number; periodo_meses: number; fator_bonificacao: number }
+  trimestral: { valor_base: number; periodo_meses: number; fator_bonificacao: number }
+  semestral: { valor_base: number; periodo_meses: number; fator_bonificacao: number }
+  anual: { valor_base: number; periodo_meses: number; fator_bonificacao: number }
+}
+
 export interface Meta {
   id: number
   ano: number
   mes: number
+  valor_meta_mrr?: number // Meta em MRR para Closers
+  meta_reunioes_sdr?: number // Meta em número de reuniões para SDRs
+  // Campos antigos mantidos para compatibilidade
   valor_meta: number
   meta_closer?: number
   meta_sdr?: number
@@ -77,6 +100,11 @@ export interface Database {
         Row: Colaborador
         Insert: Omit<Colaborador, 'id' | 'created_at'>
         Update: Partial<Omit<Colaborador, 'id' | 'created_at'>>
+      }
+      reunioes: {
+        Row: Reuniao
+        Insert: Omit<Reuniao, 'id' | 'criado_em'>
+        Update: Partial<Omit<Reuniao, 'id' | 'criado_em'>>
       }
     }
     Views: Record<string, never>

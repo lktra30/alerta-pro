@@ -4,6 +4,7 @@ import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "./theme-toggle"
 import { EditGoalsPopover } from "./edit-goals-popover"
+import { CommissionInfoModal } from "./commission-info-modal"
 
 interface DashboardHeaderProps {
   onMenuClick?: () => void
@@ -33,6 +34,10 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
         
         <div className="transform">
           <EditGoalsPopover />
+        </div>
+
+        <div className="transform">
+          <CommissionInfoModal />
         </div>
         
         {/* Theme Toggle */}

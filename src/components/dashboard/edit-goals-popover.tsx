@@ -10,8 +10,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Target, DollarSign, Users, Calendar, Save, Edit, Loader2 } from "lucide-react"
-import { getCurrentMonthMeta, getCurrentMonthMetaCloser, getCurrentMonthMetaSdr, upsertMeta, upsertMetaCloser, upsertMetaSdr, isSupabaseConfigured } from "@/lib/supabase"
+import { Target, DollarSign, Users, Save, Edit, Loader2 } from "lucide-react"
+import { getCurrentMonthMeta, getCurrentMonthMetaSdr, upsertMeta, upsertMetaSdr, isSupabaseConfigured } from "@/lib/supabase"
 
 interface GoalData {
   id: string
@@ -27,33 +27,17 @@ const initialGoals: GoalData[] = [
     id: "comercial",
     title: "Meta Comercial",
     value: 800000,
-    description: "Meta mensal de vendas",
+    description: "Meta mensal de vendas (MRR)",
     icon: DollarSign,
     color: "text-green-600"
-  },
-  {
-    id: "closer",
-    title: "Meta Closer",
-    value: 150000,
-    description: "Meta individual do closer",
-    icon: Target,
-    color: "text-blue-600"
   },
   {
     id: "sdr",
     title: "Meta SDR",
     value: 50,
-    description: "Meta de leads qualificados",
+    description: "Meta de reuniões marcadas",
     icon: Users,
     color: "text-purple-600"
-  },
-  {
-    id: "diaria",
-    title: "Meta Diária",
-    value: 25000,
-    description: "Meta de vendas por dia",
-    icon: Calendar,
-    color: "text-amber-600"
   }
 ]
 
@@ -74,10 +58,9 @@ export function EditGoalsPopover() {
       try {
         setLoading(true)
         
-        // Load all metas in parallel
-        const [currentMeta, currentMetaCloser, currentMetaSdr] = await Promise.all([
+        // Load metas in parallel (only comercial and sdr now)
+        const [currentMeta, currentMetaSdr] = await Promise.all([
           getCurrentMonthMeta(),
-          getCurrentMonthMetaCloser(), 
           getCurrentMonthMetaSdr()
         ])
         
@@ -85,8 +68,6 @@ export function EditGoalsPopover() {
         setGoals(prev => prev.map(goal => {
           if (goal.id === "comercial" && currentMeta?.valor_meta) {
             return { ...goal, value: currentMeta.valor_meta }
-          } else if (goal.id === "closer" && currentMetaCloser?.valor_meta) {
-            return { ...goal, value: currentMetaCloser.valor_meta }
           } else if (goal.id === "sdr" && currentMetaSdr?.valor_meta) {
             return { ...goal, value: currentMetaSdr.valor_meta }
           }
@@ -113,7 +94,7 @@ export function EditGoalsPopover() {
 
   const formatValue = (goal: GoalData) => {
     if (goal.id === "sdr") {
-      return `${goal.value} leads`
+      return `${goal.value} reuniões`
     }
     return formatCurrency(goal.value)
   }
@@ -147,8 +128,6 @@ export function EditGoalsPopover() {
         
         if (goalId === "comercial") {
           result = await upsertMeta(currentYear, currentMonth, newValue)
-        } else if (goalId === "closer") {
-          result = await upsertMetaCloser(currentYear, currentMonth, newValue)
         } else if (goalId === "sdr") {
           result = await upsertMetaSdr(currentYear, currentMonth, newValue)
         }

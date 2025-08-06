@@ -1265,31 +1265,369 @@ export async function getComissaoStats() {
 }
 
 // Tipos para configuração de comissão com ranks
-export interface RankConfig {
-  rank1: number // até 25% da meta
-  rank2: number // 26% a 60% da meta
-  rank3: number // 61% a 100%+ da meta
+export async function getReunioes() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Using mock data.')
+    // Mock data para desenvolvimento
+    return [
+      {
+        id: 1,
+        sdr_id: 1,
+        cliente_id: 1,
+        tipo: 'qualificada' as const,
+        data_reuniao: '2024-01-15',
+        criado_em: '2024-01-15T10:00:00Z'
+      },
+      {
+        id: 2,
+        sdr_id: 1,
+        cliente_id: 2,
+        tipo: 'gerou_venda' as const,
+        data_reuniao: '2024-01-20',
+        criado_em: '2024-01-20T14:30:00Z'
+      }
+    ]
+  }
+
+  const { data, error } = await supabase
+    .from('reunioes')
+    .select('*')
+    .order('data_reuniao', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching reunioes:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function getVendasComPlanos() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Using mock data.')
+    // Mock data para desenvolvimento
+    return [
+      {
+        id: 1,
+        closer_id: 2,
+        valor_venda: 150,
+        valor_base_plano: 100,
+        tipo_plano: 'mensal' as const,
+        data_fechamento: '2024-01-25',
+        criado_em: '2024-01-25T16:00:00Z'
+      },
+      {
+        id: 2,
+        closer_id: 2,
+        valor_venda: 600,
+        valor_base_plano: 480,
+        tipo_plano: 'semestral' as const,
+        data_fechamento: '2024-01-28',
+        criado_em: '2024-01-28T11:15:00Z'
+      }
+    ]
+  }
+
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('id, closer_id, valor_venda, valor_base_plano, tipo_plano, data_fechamento, criado_em')
+    .not('valor_venda', 'is', null)
+    .not('closer_id', 'is', null)
+    .not('data_fechamento', 'is', null)
+    .order('data_fechamento', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching vendas com planos:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function getMetasMensais() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Using mock data.')
+    // Mock data para desenvolvimento
+    return [
+      {
+        id: 1,
+        ano: 2024,
+        mes: 1,
+        valor_meta_mrr: 15000,
+        meta_reunioes_sdr: 50,
+        valor_meta: 100000,
+        meta_closer: 80000,
+        meta_sdr: 40000
+      }
+    ]
+  }
+
+  const { data, error } = await supabase
+    .from('metas')
+    .select('*')
+    .order('ano', { ascending: false })
+    .order('mes', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching metas:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function getNovoComissionamentoStats() {
+  try {
+    const [colaboradores, reunioes, vendas, metas] = await Promise.all([
+      getColaboradores(),
+      getReunioes(),
+      getVendasComPlanos(),
+      getMetasMensais()
+    ])
+
+    return {
+      colaboradores: colaboradores || [],
+      reunioes: reunioes || [],
+      vendas: vendas || [],
+      metas: metas || []
+    }
+  } catch (error) {
+    console.error('Error in getNovoComissionamentoStats:', error)
+    return {
+      colaboradores: [],
+      reunioes: [],
+      vendas: [],
+      metas: []
+    }
+  }
+}
+
+// Função para calcular MRR por mês
+export async function getMRREvolution() {
+  if (!isSupabaseConfigured() || !supabase) {
+    // Mock data para desenvolvimento
+    return [
+      { mes: 'Out/24', mrr: 0 },
+      { mes: 'Nov/24', mrr: 0 },
+      { mes: 'Dez/24', mrr: 45000 },
+      { mes: 'Jan/25', mrr: 120000 },
+      { mes: 'Fev/25', mrr: 280000 },
+      { mes: 'Mar/25', mrr: 380000 },
+      { mes: 'Abr/25', mrr: 450000 },
+      { mes: 'Mai/25', mrr: 480000 },
+      { mes: 'Jun/25', mrr: 520000 },
+      { mes: 'Jul/25', mrr: 680000 },
+      { mes: 'Ago/25', mrr: 650000 }
+    ]
+  }
+
+  try {
+    const { data: vendas, error } = await supabase
+      .from('clientes')
+      .select('valor_venda, tipo_plano, data_fechamento')
+      .not('valor_venda', 'is', null)
+      .not('data_fechamento', 'is', null)
+      .order('data_fechamento', { ascending: true })
+
+    if (error) throw error
+
+    // Agrupar por mês e calcular MRR
+    const mrrByMonth: { [key: string]: number } = {}
+    
+    vendas?.forEach(venda => {
+      if (venda.data_fechamento && venda.valor_venda && venda.tipo_plano) {
+        const date = new Date(venda.data_fechamento)
+        const monthKey = `${date.getMonth() + 1}/${date.getFullYear()}`
+        
+        // Calcular MRR baseado no tipo de plano
+        let mrr = venda.valor_venda
+        switch (venda.tipo_plano) {
+          case 'trimestral':
+            mrr = venda.valor_venda / 3
+            break
+          case 'semestral':
+            mrr = venda.valor_venda / 6
+            break
+          case 'anual':
+            mrr = venda.valor_venda / 12
+            break
+          default: // mensal
+            mrr = venda.valor_venda
+        }
+        
+        mrrByMonth[monthKey] = (mrrByMonth[monthKey] || 0) + mrr
+      }
+    })
+
+    return Object.entries(mrrByMonth).map(([mes, mrr]) => ({ mes, mrr }))
+  } catch (error) {
+    console.error('Error calculating MRR evolution:', error)
+    return []
+  }
+}
+
+// Função para calcular dias úteis do mês
+export function getWorkingDaysInMonth(year: number, month: number): number {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  let workingDays = 0
+  
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day)
+    const dayOfWeek = date.getDay()
+    // 0 = Domingo, 6 = Sábado
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      workingDays++
+    }
+  }
+  
+  return workingDays
+}
+
+// Função para obter estatísticas avançadas do dashboard
+export async function getAdvancedDashboardStats() {
+  if (!isSupabaseConfigured() || !supabase) {
+    // Mock data para desenvolvimento
+    const currentDate = new Date()
+    const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
+    const currentDay = currentDate.getDate()
+    const workingDaysElapsed = Math.min(currentDay, workingDays)
+    
+    return {
+      totalFaturamento: 94250,
+      metaMensal: 50000,
+      metaDiaria: 50000 / workingDays,
+      faturamentoDiario: 6200,
+      progressoMetaDiaria: (6200 / (50000 / workingDays)) * 100,
+      diasUteis: workingDays,
+      diasUteisDecorridos: workingDaysElapsed,
+      ticketMedio: 3927.08,
+      totalVendas: 24,
+      totalInvestido: 41054.40,
+      cac: 1710.60,
+      roas: 2.3,
+      clientesAdquiridos: 24,
+      totalReunioesMarcadas: 35,
+      metaReunioesSdr: 50,
+      planosMensais: 8,
+      planosTrimestrais: 6,
+      planosSemestrais: 5,
+      planosAnuais: 5
+    }
+  }
+
+  try {
+    const [clientes, metas, metasSdr, reunioes] = await Promise.all([
+      supabase.from('clientes').select('*'),
+      supabase.from('metas').select('*').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1),
+      supabase.from('metas_sdr').select('*').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1),
+      supabase.from('reunioes').select('*')
+    ])
+
+    const vendas = clientes.data?.filter(c => c.data_fechamento && c.valor_venda) || []
+    const totalFaturamento = vendas.reduce((sum, v) => sum + (v.valor_venda || 0), 0)
+    const metaMensal = metas.data?.[0]?.valor_meta || 50000
+    const metaReunioesSdr = metasSdr.data?.[0]?.valor_meta || 50
+    
+    // Contar planos por tipo
+    const planosMensais = vendas.filter(v => v.tipo_plano === 'mensal').length
+    const planosTrimestrais = vendas.filter(v => v.tipo_plano === 'trimestral').length
+    const planosSemestrais = vendas.filter(v => v.tipo_plano === 'semestral').length
+    const planosAnuais = vendas.filter(v => v.tipo_plano === 'anual').length
+    
+    // Contar reuniões marcadas do mês atual
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth() + 1
+    const currentYear = currentDate.getFullYear()
+    
+    const reunioesDoMes = reunioes.data?.filter(r => {
+      if (!r.data_reuniao) return false
+      const reuniaoDate = new Date(r.data_reuniao)
+      return reuniaoDate.getMonth() + 1 === currentMonth && reuniaoDate.getFullYear() === currentYear
+    }) || []
+    
+    const totalReunioesMarcadas = reunioesDoMes.length
+    
+    const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
+    const currentDay = currentDate.getDate()
+    const workingDaysElapsed = Math.min(currentDay, workingDays)
+    
+    const metaDiaria = metaMensal / workingDays
+    const faturamentoDiario = totalFaturamento / workingDaysElapsed
+    
+    return {
+      totalFaturamento,
+      metaMensal,
+      metaDiaria,
+      faturamentoDiario,
+      progressoMetaDiaria: (faturamentoDiario / metaDiaria) * 100,
+      diasUteis: workingDays,
+      diasUteisDecorridos: workingDaysElapsed,
+      ticketMedio: vendas.length > 0 ? totalFaturamento / vendas.length : 0,
+      totalVendas: vendas.length,
+      totalInvestido: 41054.40, // Mock data - integrar com Meta Ads
+      cac: vendas.length > 0 ? 41054.40 / vendas.length : 0,
+      roas: 41054.40 > 0 ? totalFaturamento / 41054.40 : 0,
+      clientesAdquiridos: vendas.length,
+      totalReunioesMarcadas,
+      metaReunioesSdr,
+      planosMensais,
+      planosTrimestrais,
+      planosSemestrais,
+      planosAnuais
+    }
+  } catch (error) {
+    console.error('Error getting advanced dashboard stats:', error)
+    return {
+      totalFaturamento: 0,
+      metaMensal: 0,
+      metaDiaria: 0,
+      faturamentoDiario: 0,
+      progressoMetaDiaria: 0,
+      diasUteis: 0,
+      diasUteisDecorridos: 0,
+      ticketMedio: 0,
+      totalVendas: 0,
+      totalInvestido: 0,
+      cac: 0,
+      roas: 0,
+      clientesAdquiridos: 0,
+      totalReunioesMarcadas: 0,
+      metaReunioesSdr: 50,
+      planosMensais: 0,
+      planosTrimestrais: 0,
+      planosSemestrais: 0,
+      planosAnuais: 0
+    }
+  }
+}
+
+// Configurações do novo sistema de comissionamento
+// Tipos para configuração de comissão com checkpoints
+interface CheckpointConfig {
+  checkpoint1: number // até 25% da meta
+  checkpoint2: number // 26% a 60% da meta
+  checkpoint3: number // 61% a 100%+ da meta
 }
 
 export interface ComissaoConfig {
-  sdr: RankConfig
-  closer: RankConfig
+  sdr: CheckpointConfig
+  closer: CheckpointConfig
 }
 
 // Funções para configurações de comissão (usando localStorage por simplicidade)
 export function getComissaoConfig(): ComissaoConfig {
   if (typeof window === 'undefined') {
     return {
-      sdr: { rank1: 3, rank2: 5, rank3: 7 },
-      closer: { rank1: 6, rank2: 10, rank3: 15 }
+      sdr: { checkpoint1: 3, checkpoint2: 5, checkpoint3: 7 },
+      closer: { checkpoint1: 6, checkpoint2: 10, checkpoint3: 15 }
     }
   }
   
-  const config = localStorage.getItem('comissao_config_ranks')
+  const config = localStorage.getItem('comissao_config_checkpoints')
   if (!config) {
     return {
-      sdr: { rank1: 3, rank2: 5, rank3: 7 },
-      closer: { rank1: 6, rank2: 10, rank3: 15 }
+      sdr: { checkpoint1: 3, checkpoint2: 5, checkpoint3: 7 },
+      closer: { checkpoint1: 6, checkpoint2: 10, checkpoint3: 15 }
     }
   }
   
@@ -1297,8 +1635,8 @@ export function getComissaoConfig(): ComissaoConfig {
     return JSON.parse(config)
   } catch {
     return {
-      sdr: { rank1: 3, rank2: 5, rank3: 7 },
-      closer: { rank1: 6, rank2: 10, rank3: 15 }
+      sdr: { checkpoint1: 3, checkpoint2: 5, checkpoint3: 7 },
+      closer: { checkpoint1: 6, checkpoint2: 10, checkpoint3: 15 }
     }
   }
 }
@@ -1306,38 +1644,313 @@ export function getComissaoConfig(): ComissaoConfig {
 export function setComissaoConfig(config: ComissaoConfig) {
   if (typeof window === 'undefined') return
   
-  localStorage.setItem('comissao_config_ranks', JSON.stringify(config))
+  localStorage.setItem('comissao_config_checkpoints', JSON.stringify(config))
 }
 
-// Função para calcular o rank baseado no percentual da meta
-export function calculateRank(percentualMeta: number): 1 | 2 | 3 {
-  if (percentualMeta <= 25) return 1
-  if (percentualMeta <= 60) return 2
-  return 3
+// Função para calcular o checkpoint baseado no percentual da meta
+export function calculateCheckpoint(percentualMeta: number): 0 | 1 | 2 | 3 {
+  if (percentualMeta < 20) return 0  // Sem comissão
+  if (percentualMeta < 65) return 1  // 1/3 dos valores fixos
+  if (percentualMeta < 100) return 2 // 2/3 dos valores fixos
+  return 3 // Valores fixos completos
 }
 
-// Função para obter o percentual de comissão baseado no rank
-export function getComissaoPercentual(funcao: string, rank: 1 | 2 | 3, config: ComissaoConfig): number {
+// Função para obter o percentual de comissão baseado no checkpoint
+export function getComissaoPercentual(funcao: string, checkpoint: 0 | 1 | 2 | 3, config: ComissaoConfig): number {
+  if (checkpoint === 0) return 0 // Sem comissão
+  
   const roleConfig = funcao.toLowerCase() === 'sdr' ? config.sdr : config.closer
   
-  switch (rank) {
-    case 1: return roleConfig.rank1
-    case 2: return roleConfig.rank2
-    case 3: return roleConfig.rank3
-    default: return roleConfig.rank1
+  switch (checkpoint) {
+    case 1: return roleConfig.checkpoint1
+    case 2: return roleConfig.checkpoint2  
+    case 3: return roleConfig.checkpoint3
+    default: return 0
   }
 }
 
-// Função para obter informações do rank
-export function getRankInfo(rank: 1 | 2 | 3): { name: string; color: string; range: string } {
-  switch (rank) {
+// Função para obter informações do checkpoint
+export function getCheckpointInfo(checkpoint: 0 | 1 | 2 | 3): { name: string; color: string; range: string } {
+  switch (checkpoint) {
+    case 0:
+      return { name: 'Sem Comissão', color: 'bg-gray-500', range: '0-19%' }
     case 1:
-      return { name: 'Rank 1', color: 'bg-slate-500', range: '0-25%' }
+      return { name: 'Checkpoint 1', color: 'bg-red-500', range: '20-64%' }
     case 2:
-      return { name: 'Rank 2', color: 'bg-blue-500', range: '26-60%' }
+      return { name: 'Checkpoint 2', color: 'bg-blue-500', range: '65-99%' }
     case 3:
-      return { name: 'Rank 3', color: 'bg-green-500', range: '61-100%+' }
+      return { name: 'Checkpoint 3', color: 'bg-green-500', range: '100%+' }
     default:
-      return { name: 'Rank 1', color: 'bg-slate-500', range: '0-25%' }
+      return { name: 'Checkpoint 1', color: 'bg-slate-500', range: '0-25%' }
+  }
+}
+
+// Interfaces para ranking
+export interface TopCloser {
+  id: number
+  nome: string
+  totalVendas: number
+  totalMRR: number
+  numeroVendas: number
+  percentualVendas: number
+  vendasPorTipo: {
+    mensal: { quantidade: number; valor: number }
+    trimestral: { quantidade: number; valor: number }
+    semestral: { quantidade: number; valor: number }
+    anual: { quantidade: number; valor: number }
+  }
+}
+
+export interface TopSDR {
+  id: number
+  nome: string
+  totalReunioes: number
+  reunioesQualificadas: number
+  vendasGeradas: number
+  totalMRRGerado: number
+  percentualReunioes: number
+}
+
+// Função para calcular MRR baseado no tipo de plano
+function calculateMRR(valorBase: number, tipoPlano: string): number {
+  switch (tipoPlano) {
+    case 'mensal': return valorBase
+    case 'trimestral': return valorBase / 3
+    case 'semestral': return valorBase / 6
+    case 'anual': return valorBase / 12
+    default: return valorBase
+  }
+}
+
+// Função para buscar top closers do banco
+export async function getTopClosers(): Promise<TopCloser[]> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return []
+  }
+
+  try {
+    // Buscar vendas sem JOIN
+    const { data: vendas, error } = await supabase
+      .from('clientes')
+      .select('*')
+      .not('data_fechamento', 'is', null)
+      .not('valor_venda', 'is', null)
+      .not('closer_id', 'is', null)
+
+    if (error) {
+      console.error('Error fetching closers:', error)
+      return []
+    }
+
+    // Buscar colaboradores
+    const { data: colaboradores, error: colaboradoresError } = await supabase
+      .from('colaboradores')
+      .select('*')
+
+    if (colaboradoresError) {
+      console.error('Error fetching colaboradores for closers:', colaboradoresError)
+      return []
+    }
+
+    if (!vendas || vendas.length === 0) {
+      return []
+    }
+
+    // Criar map para lookup
+    const colaboradoresMap = new Map()
+    colaboradores?.forEach(colab => {
+      colaboradoresMap.set(colab.id, colab)
+    })
+
+    // Agrupar vendas por closer
+    const closersMap = new Map<number, {
+      id: number
+      nome: string
+      vendas: Array<{
+        valor: number
+        valorBase: number
+        tipo: string
+      }>
+    }>()
+
+    vendas.forEach((venda: any) => {
+      const colaborador = colaboradoresMap.get(venda.closer_id)
+      if (colaborador && colaborador.funcao.toLowerCase() === 'closer') {
+        const closerId = venda.closer_id
+        if (!closersMap.has(closerId)) {
+          closersMap.set(closerId, {
+            id: closerId,
+            nome: colaborador.nome,
+            vendas: []
+          })
+        }
+        closersMap.get(closerId)?.vendas.push({
+          valor: venda.valor_venda || 0,
+          valorBase: venda.valor_base_plano || venda.valor_venda || 0,
+          tipo: venda.tipo_plano || 'mensal'
+        })
+      }
+    })
+
+    // Calcular estatísticas para cada closer
+    const totalGeralVendas = vendas.reduce((sum: number, v: any) => sum + (v.valor_venda || 0), 0)
+    
+    const topClosers: TopCloser[] = Array.from(closersMap.values()).map(closer => {
+      const totalVendas = closer.vendas.reduce((sum, v) => sum + v.valor, 0)
+      const totalMRR = closer.vendas.reduce((sum, v) => sum + calculateMRR(v.valorBase, v.tipo), 0)
+      
+      // Calcular vendas por tipo
+      const vendasPorTipo = {
+        mensal: { quantidade: 0, valor: 0 },
+        trimestral: { quantidade: 0, valor: 0 },
+        semestral: { quantidade: 0, valor: 0 },
+        anual: { quantidade: 0, valor: 0 }
+      }
+
+      closer.vendas.forEach(venda => {
+        const tipo = venda.tipo as keyof typeof vendasPorTipo
+        if (vendasPorTipo[tipo]) {
+          vendasPorTipo[tipo].quantidade++
+          vendasPorTipo[tipo].valor += venda.valor
+        }
+      })
+
+      return {
+        id: closer.id,
+        nome: closer.nome,
+        totalVendas,
+        totalMRR,
+        numeroVendas: closer.vendas.length,
+        percentualVendas: totalGeralVendas > 0 ? (totalVendas / totalGeralVendas) * 100 : 0,
+        vendasPorTipo
+      }
+    })
+
+    // Ordenar por total de MRR
+    return topClosers.sort((a, b) => b.totalMRR - a.totalMRR)
+    
+  } catch (error) {
+    console.error('Error in getTopClosers:', error)
+    return []
+  }
+}
+
+// Função para buscar top SDRs do banco
+export async function getTopSDRs(): Promise<TopSDR[]> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return []
+  }
+
+  try {
+    // Buscar reuniões com dados do colaborador (sem JOIN first para testar)
+    const { data: reunioes, error: reunioesError } = await supabase
+      .from('reunioes')
+      .select('*')
+
+    if (reunioesError) {
+      console.error('Error fetching reunioes:', reunioesError)
+      return []
+    }
+
+    // Buscar colaboradores separadamente
+    const { data: colaboradores, error: colaboradoresError } = await supabase
+      .from('colaboradores')
+      .select('*')
+
+    if (colaboradoresError) {
+      console.error('Error fetching colaboradores:', colaboradoresError)
+      return []
+    }
+
+    // Buscar vendas geradas por SDR (sem JOIN também)
+    const { data: vendas, error: vendasError } = await supabase
+      .from('clientes')
+      .select('*')
+      .not('data_fechamento', 'is', null)
+      .not('valor_venda', 'is', null)
+      .not('sdr_id', 'is', null)
+
+    if (vendasError) {
+      console.error('Error fetching vendas for SDR:', vendasError)
+      return []
+    }
+
+    if (!reunioes || reunioes.length === 0) {
+      return []
+    }
+
+    // Criar maps para lookup rápido
+    const colaboradoresMap = new Map()
+    colaboradores?.forEach(colab => {
+      colaboradoresMap.set(colab.id, colab)
+    })
+
+    // Agrupar por SDR
+    const sdrsMap = new Map<number, {
+      id: number
+      nome: string
+      reunioes: Array<{ tipo: string }>
+      vendas: Array<{ valor: number; valorBase: number; tipo: string }>
+    }>()
+
+    // Processar reuniões
+    reunioes.forEach((reuniao: any) => {
+      const colaborador = colaboradoresMap.get(reuniao.sdr_id)
+      if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+        const sdrId = reuniao.sdr_id
+        if (!sdrsMap.has(sdrId)) {
+          sdrsMap.set(sdrId, {
+            id: sdrId,
+            nome: colaborador.nome,
+            reunioes: [],
+            vendas: []
+          })
+        }
+        sdrsMap.get(sdrId)?.reunioes.push({ tipo: reuniao.tipo })
+      }
+    })
+
+    // Processar vendas
+    if (vendas) {
+      vendas.forEach((venda: any) => {
+        const colaborador = colaboradoresMap.get(venda.sdr_id)
+        if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+          const sdrId = venda.sdr_id
+          if (sdrsMap.has(sdrId)) {
+            sdrsMap.get(sdrId)?.vendas.push({
+              valor: venda.valor_venda || 0,
+              valorBase: venda.valor_base_plano || venda.valor_venda || 0,
+              tipo: venda.tipo_plano || 'mensal'
+            })
+          }
+        }
+      })
+    }
+
+    // Calcular estatísticas
+    const totalReunioes = reunioes.length
+    
+    const topSDRs: TopSDR[] = Array.from(sdrsMap.values()).map(sdr => {
+      const reunioesQualificadas = sdr.reunioes.filter(r => r.tipo === 'qualificada').length
+      const vendasGeradas = sdr.vendas.length
+      const totalMRRGerado = sdr.vendas.reduce((sum, v) => sum + calculateMRR(v.valorBase, v.tipo), 0)
+
+      return {
+        id: sdr.id,
+        nome: sdr.nome,
+        totalReunioes: sdr.reunioes.length,
+        reunioesQualificadas,
+        vendasGeradas,
+        totalMRRGerado,
+        percentualReunioes: totalReunioes > 0 ? (sdr.reunioes.length / totalReunioes) * 100 : 0
+      }
+    })
+
+    // Ordenar por MRR gerado
+    return topSDRs.sort((a, b) => b.totalMRRGerado - a.totalMRRGerado)
+    
+  } catch (error) {
+    console.error('Error in getTopSDRs:', error)
+    return []
   }
 }
