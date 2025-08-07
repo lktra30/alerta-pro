@@ -50,7 +50,7 @@ export default function SignIn() {
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Dashboard AlertaPro</CardTitle>
+            <CardTitle className="text-2xl font-bold">Dashboard Alerta Pro</CardTitle>
             <CardDescription>
               Faça login para acessar o dashboard
             </CardDescription>
