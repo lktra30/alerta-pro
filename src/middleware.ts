@@ -3,6 +3,11 @@ import { NextResponse } from "next/server"
 
 export default withAuth(
   function middleware(req) {
+    // Redirecionar /login para /auth/signin
+    if (req.nextUrl.pathname === "/login") {
+      return NextResponse.redirect(new URL("/auth/signin", req.url))
+    }
+    
     // Middleware executado após autenticação bem-sucedida
     return NextResponse.next()
   },
@@ -32,5 +37,6 @@ export const config = {
      * - public assets
      */
     "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.svg$).*)",
+    "/login",
   ],
 } 
