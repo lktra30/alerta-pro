@@ -39,6 +39,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <main className="flex-1 overflow-auto p-3 sm:p-6 pb-20 md:pb-6">
           <div className="max-w-full mx-auto">
             {children}
+            {/* Espaço extra para mobile bottom nav */}
+            <div className="h-8 md:hidden" aria-hidden="true" />
           </div>
         </main>
       </div>

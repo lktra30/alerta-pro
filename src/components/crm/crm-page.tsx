@@ -83,6 +83,8 @@ export function CRMPage() {
   const [totalMRR, setTotalMRR] = useState(0)
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table')
   const [draggedOver, setDraggedOver] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null)
 
   // Função helper para obter data no fuso horário brasileiro (UTC-3 / São Paulo)
   const getBrazilDate = (date?: Date) => {
@@ -264,6 +266,36 @@ export function CRMPage() {
       await handleEtapaChange(clienteId, newEtapa)
     }
 
+    // Auto-scroll functionality
+    const handleAutoScroll = (e: React.DragEvent) => {
+      if (!scrollContainer || !isDragging) return
+
+      const rect = scrollContainer.getBoundingClientRect()
+      const clientX = e.clientX
+      const scrollThreshold = 100 // pixels from edge to start scrolling
+      const scrollSpeed = 10
+
+      // Scroll left
+      if (clientX - rect.left < scrollThreshold) {
+        scrollContainer.scrollLeft -= scrollSpeed
+      }
+      // Scroll right
+      else if (rect.right - clientX < scrollThreshold) {
+        scrollContainer.scrollLeft += scrollSpeed
+      }
+    }
+
+    const handleDragStart = (e: React.DragEvent, clienteId: number) => {
+      setIsDragging(true)
+      e.dataTransfer.setData('text/plain', clienteId.toString())
+      e.dataTransfer.effectAllowed = 'move'
+    }
+
+    const handleDragEnd = () => {
+      setIsDragging(false)
+      setDraggedOver(null)
+    }
+
     return (
       <div className="w-full">
         {/* Dica para mobile */}
@@ -274,10 +306,15 @@ export function CRMPage() {
         </div>
         
         <div 
+          ref={setScrollContainer}
           className="overflow-x-auto pb-4"
           style={{
             // Desabilita scroll durante drag
             overflowX: draggedOver ? 'hidden' : 'auto'
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            handleAutoScroll(e)
           }}
         >
           <div className="flex gap-6 lg:grid lg:grid-cols-5 lg:gap-6 min-w-max lg:min-w-0">
@@ -347,9 +384,8 @@ export function CRMPage() {
                         className="p-3 cursor-move lg:cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02] relative group border bg-card/80 backdrop-blur-sm select-none"
                         draggable
                         onDragStart={(e) => {
+                          handleDragStart(e, cliente.id)
                           e.stopPropagation()
-                          e.dataTransfer.setData('text/plain', cliente.id.toString())
-                          e.dataTransfer.effectAllowed = 'move'
                           e.currentTarget.style.opacity = '0.5'
                           e.currentTarget.style.transform = 'scale(0.95) rotate(5deg)'
                           
@@ -364,12 +400,12 @@ export function CRMPage() {
                           }
                         }}
                         onDragEnd={(e) => {
+                          handleDragEnd()
                           e.stopPropagation()
                           e.currentTarget.style.opacity = '1'
                           e.currentTarget.style.transform = 'none'
                           e.currentTarget.classList.remove('dragging')
                           document.body.classList.remove('dragging')
-                          setDraggedOver(null)
                           
                           // Reabilitar scroll
                           const scrollContainer = e.currentTarget.closest('.overflow-x-auto') as HTMLElement

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { AlertCircle, Loader2, LayoutDashboard } from "lucide-react"
 
 export default function SignIn() {
   const [username, setUsername] = useState("")
@@ -46,19 +46,35 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Dashboard Alerta Pro</CardTitle>
-            <CardDescription>
-              Faça login para acessar o dashboard
+        {/* Logo Section */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-muted rounded-lg mb-4">
+            <LayoutDashboard className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Entre com suas credenciais
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <Card className="border shadow-sm">
+          <CardHeader className="space-y-1 pb-6">
+            <CardTitle className="text-xl font-medium text-center">Login</CardTitle>
+            <CardDescription className="text-center text-sm">
+              Acesse sua conta
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Usuário</Label>
+                <Label htmlFor="username" className="text-sm font-medium">
+                  Usuário
+                </Label>
                 <Input
                   id="username"
                   type="text"
@@ -67,11 +83,14 @@ export default function SignIn() {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   disabled={loading}
+                  className="h-10"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Senha
+                </Label>
                 <Input
                   id="password"
                   type="password"
@@ -80,19 +99,20 @@ export default function SignIn() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={loading}
+                  className="h-10"
                 />
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 text-destructive text-sm">
-                  <AlertCircle className="h-4 w-4" />
+                <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-md p-3">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               <Button 
                 type="submit" 
-                className="w-full" 
+                className="w-full h-10 mt-6" 
                 disabled={loading}
               >
                 {loading ? (

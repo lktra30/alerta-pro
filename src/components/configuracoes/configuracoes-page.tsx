@@ -73,12 +73,17 @@ export function ConfiguracoesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-          <p className="text-muted-foreground">
-            Gerencie os colaboradores da sua empresa
-          </p>
+      {/* Header Responsivo */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Configurações</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">
+                Gerencie os colaboradores da sua empresa
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -93,22 +98,22 @@ export function ConfiguracoesPage() {
       {/* Colaboradores Section */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Colaboradores
+                <Users className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate">Colaboradores</span>
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="mt-1">
                 Gerencie os colaboradores da sua empresa
               </CardDescription>
             </div>
             <Button 
               onClick={() => setShowNovoColaborador(true)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0"
             >
               <Plus className="h-4 w-4" />
-              Novo Colaborador
+              <span className="sm:inline">Novo Colaborador</span>
             </Button>
           </div>
         </CardHeader>
