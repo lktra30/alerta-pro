@@ -29,7 +29,6 @@ interface ComissaoData {
 export function ComissaoPage() {
   const [showConfig, setShowConfig] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
-  const [reunioes, setReunioes] = useState<any[]>([])
   const [reunioesFiltradas, setReunioesFiltradas] = useState<any[]>([])
   const [periodoFilter, setPeriodoFilter] = useState<string>("esteMes")
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
@@ -220,7 +219,6 @@ export function ComissaoPage() {
         ])
         
         setClientes(clientesData)
-        setReunioes(reunioesData)
         
         // Calcular comissões
         await calculateAllComissoes(colaboradoresData, clientesData, reunioesData)
