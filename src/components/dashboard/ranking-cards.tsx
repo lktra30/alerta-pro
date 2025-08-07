@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Trophy, Target } from "lucide-react"
-import { getNovoComissionamentoStats } from "@/lib/supabase"
+import { getNovoComissionamentoStats, getMetasIndividuais } from "@/lib/supabase"
 import { 
   getNovaComissaoConfig, 
   calculateComissaoSDR, 
@@ -27,6 +27,12 @@ export function RankingCards() {
   const [sdrs, setSdrs] = useState<ColaboradorSDR[]>([])
   const [closers, setClosers] = useState<ColaboradorCloser[]>([])
   const [loading, setLoading] = useState(true)
+  const [metasIndividuais, setMetasIndividuais] = useState({
+    metaIndividualCloser: 200000,
+    metaIndividualSDR: 25,
+    totalClosers: 1,
+    totalSDRs: 1
+  })
 
   useEffect(() => {
     loadRankingData()
@@ -34,7 +40,17 @@ export function RankingCards() {
 
   const loadRankingData = async () => {
     try {
-      const comissionamentoData = await getNovoComissionamentoStats()
+      const [comissionamentoData, metasIndividuaisData] = await Promise.all([
+        getNovoComissionamentoStats(),
+        getMetasIndividuais()
+      ])
+      
+      setMetasIndividuais({
+        metaIndividualCloser: metasIndividuaisData.metaIndividualCloser,
+        metaIndividualSDR: metasIndividuaisData.metaIndividualSDR,
+        totalClosers: metasIndividuaisData.totalClosers || 1,
+        totalSDRs: metasIndividuaisData.totalSDRs || 1
+      })
       
       const config = getNovaComissaoConfig()
       const { colaboradores, reunioes, vendas, metas } = comissionamentoData
@@ -201,7 +217,7 @@ export function RankingCards() {
                       {sdr.stats.reunioes.qualificadas + sdr.stats.reunioes.gerou_venda} reuniões
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Meta: R$ 200.000,00
+                      Meta: {metasIndividuais.metaIndividualSDR} reuniões
                     </div>
                   </div>
                 </div>
@@ -247,7 +263,7 @@ export function RankingCards() {
                       {closer.stats.detalhesVendas.length} vendas
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Meta: R$ 200.000,00
+                      Meta: {formatCurrency(metasIndividuais.metaIndividualCloser)}
                     </div>
                   </div>
                 </div>

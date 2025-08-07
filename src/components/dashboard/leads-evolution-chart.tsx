@@ -8,8 +8,8 @@ import { getLeadsEvolutionData, isSupabaseConfigured } from "@/lib/supabase"
 interface LeadsEvolutionData {
   month: string
   leadsTotal: number
-  leadsQualificados: number
-  reunioesMarcadas: number
+  reunioesAgendadas: number
+  reunioesRealizadas: number
   vendas: number
 }
 
@@ -96,6 +96,31 @@ export function LeadsEvolutionChart() {
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '6px'
                     }}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload
+                        return (
+                          <div className="bg-background border border-border rounded-md p-3 shadow-md">
+                            <p className="font-medium mb-2">{label}</p>
+                            <div className="space-y-1">
+                              <p className="text-sm">
+                                <span className="text-green-600">🟢 Leads Totais:</span> {data.leadsTotal}
+                              </p>
+                              <p className="text-sm">
+                                <span className="text-green-400">🟡 Reuniões Agendadas:</span> {data.reunioesAgendadas}
+                              </p>
+                              <p className="text-sm">
+                                <span className="text-blue-500">🔵 Reuniões Realizadas:</span> {data.reunioesRealizadas}
+                              </p>
+                              <p className="text-sm">
+                                <span className="text-pink-500">🔴 Vendas:</span> {data.vendas}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    }}
                   />
                   <Legend />
                   <Line 
@@ -108,19 +133,19 @@ export function LeadsEvolutionChart() {
                   />
                   <Line 
                     type="monotone" 
-                    dataKey="leadsQualificados" 
+                    dataKey="reunioesAgendadas" 
                     stroke="#06d6a0"
                     strokeWidth={2}
                     dot={{ fill: '#06d6a0', strokeWidth: 2, r: 3 }}
-                    name="Leads Qualificados"
+                    name="Reuniões Agendadas"
                   />
                   <Line 
                     type="monotone" 
-                    dataKey="reunioesMarcadas" 
+                    dataKey="reunioesRealizadas" 
                     stroke="#118ab2"
                     strokeWidth={2}
                     dot={{ fill: '#118ab2', strokeWidth: 2, r: 3 }}
-                    name="Reuniões Marcadas"
+                    name="Reuniões Realizadas"
                   />
                   <Line 
                     type="monotone" 
@@ -150,13 +175,13 @@ export function LeadsEvolutionChart() {
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-teal-400 rounded-full"></div>
                     <span className="text-sm">
-                      <strong>Leads Qualificados:</strong> {leadsEvolutionData[leadsEvolutionData.length - 1]?.leadsQualificados || 0}
+                      <strong>Reuniões Agendadas:</strong> {leadsEvolutionData[leadsEvolutionData.length - 1]?.reunioesAgendadas || 0}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                     <span className="text-sm">
-                      <strong>Reuniões Marcadas:</strong> {leadsEvolutionData[leadsEvolutionData.length - 1]?.reunioesMarcadas || 0}
+                      <strong>Reuniões Realizadas:</strong> {leadsEvolutionData[leadsEvolutionData.length - 1]?.reunioesRealizadas || 0}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

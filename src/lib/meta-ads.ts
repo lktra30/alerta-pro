@@ -71,6 +71,38 @@ export class MetaAdsService {
     }
   }
 
+  async getMonthlyInsights(since: string, until: string): Promise<MetaAdsData> {
+    if (!this.accessToken) {
+      throw new Error("Meta access token not configured")
+    }
+
+    const url = `${FACEBOOK_API_BASE}/${AD_ACCOUNT_ID}/insights`
+    const params = new URLSearchParams({
+      fields: "spend,impressions,clicks,reach",
+      "time_range[since]": since,
+      "time_range[until]": until,
+      time_increment: "monthly",
+      access_token: this.accessToken,
+    })
+
+    try {
+      console.log('Fetching monthly insights from Meta API:', `${url}?${params}`)
+      const response = await fetch(`${url}?${params}`)
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(`Facebook API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`)
+      }
+      
+      const data = await response.json()
+      console.log('Monthly insights response:', data)
+      return data
+    } catch (error) {
+      console.error("Error fetching monthly Meta Ads insights:", error)
+      throw error
+    }
+  }
+
   calculateMetrics(insights: MetaAdsData): MetaAdsMetrics {
     if (!insights.data || insights.data.length === 0) {
       return {
@@ -78,10 +110,9 @@ export class MetaAdsService {
         investimentoPorLead: 0,
         alcance: 0,
         cpcMedio: 0,
-        leadsDoMes: 0,
-        leadsQualificados: 0,
         reunioesMarcadas: 0,
-        novosClientes: 0,
+        reunioesRealizadas: 0,
+        novosFechamentos: 0,
       }
     }
 
@@ -106,24 +137,35 @@ export class MetaAdsService {
       investimentoPorLead: estimatedLeads > 0 ? totalData.spend / estimatedLeads : 0,
       alcance: totalData.reach,
       cpcMedio: totalData.clicks > 0 ? totalData.spend / totalData.clicks : 0,
-      leadsDoMes: estimatedLeads,
-      leadsQualificados: qualifiedLeads,
       reunioesMarcadas: meetings,
-      novosClientes: newClients,
+      reunioesRealizadas: meetings,
+      novosFechamentos: newClients,
     }
   }
 
   transformToMonthlyData(dailyInsights: MetaAdsData): MonthlyInvestment[] {
     if (!dailyInsights.data) return []
 
-    return dailyInsights.data.map((insight, index) => {
+    // Agrupar dados por mês
+    const monthlyMap = new Map<string, number>()
+
+    dailyInsights.data.forEach((insight, index) => {
       const date = new Date()
       date.setDate(date.getDate() - (dailyInsights.data.length - 1 - index))
       
-      return {
-        date: date.toISOString().split('T')[0],
-        investido: parseFloat(insight.spend || "0"),
-      }
+      // Criar chave do mês (YYYY-MM)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      
+      const spend = parseFloat(insight.spend || "0")
+      monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + spend)
     })
+
+    // Converter Map para array e ordenar por data
+    return Array.from(monthlyMap.entries())
+      .map(([monthKey, totalSpend]) => ({
+        date: monthKey + '-01', // Primeiro dia do mês para compatibilidade
+        investido: totalSpend,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }
 }

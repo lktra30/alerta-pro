@@ -10,118 +10,98 @@ import {
   UserCheck, 
   CheckCircle, 
   Calendar,
-  Trophy
+  Trophy,
+  TrendingUp
 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface MetaAdsPerformanceCardsProps {
   metrics: MetaAdsMetrics
-  isLoading?: boolean
+  isLoading: boolean
 }
 
 export function MetaAdsPerformanceCards({ metrics, isLoading }: MetaAdsPerformanceCardsProps) {
-  const cards = [
+  const metaAdsCards = [
     {
       title: "Total Investido",
-      value: `R$ ${metrics.totalInvestido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      subtitle: "em anúncios",
+      value: `R$ ${metrics.totalInvestido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      subtitle: "em Meta Ads",
       icon: DollarSign,
       iconColor: "text-green-500"
     },
     {
       title: "Investimento por Lead",
-      value: `R$ ${metrics.investimentoPorLead.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      subtitle: "por lead",
-      icon: Target,
-      iconColor: "text-green-600"
+      value: `R$ ${metrics.investimentoPorLead.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      subtitle: "custo médio",
+      icon: TrendingUp,
+      iconColor: "text-blue-500"
     },
     {
       title: "Alcance",
       value: metrics.alcance.toLocaleString('pt-BR'),
-      subtitle: "pessoas únicas",
+      subtitle: "pessoas alcançadas",
       icon: Users,
-      iconColor: "text-green-400"
+      iconColor: "text-purple-500"
     },
     {
       title: "CPC Médio",
-      value: `R$ ${metrics.cpcMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      subtitle: `${(metrics.alcance * 0.05).toFixed(0)} cliques`,
+      value: `R$ ${metrics.cpcMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      subtitle: "custo por clique",
       icon: MousePointer,
-      iconColor: "text-green-600"
-    },
-    {
-      title: "Leads do Mês",
-      value: metrics.leadsDoMes.toString(),
-      subtitle: "total de leads",
-      icon: UserCheck,
-      iconColor: "text-green-500"
-    },
-    {
-      title: "Leads Qualificados",
-      value: metrics.leadsQualificados.toString(),
-      subtitle: "no mês",
-      icon: CheckCircle,
-      iconColor: "text-green-600"
-    },
-    {
-      title: "Reuniões Marcadas",
-      value: metrics.reunioesMarcadas.toString(),
-      subtitle: "no mês",
-      icon: Calendar,
-      iconColor: "text-green-500"
-    },
-    {
-      title: "Novos Clientes",
-      value: metrics.novosClientes.toString(),
-      subtitle: "do mês",
-      icon: Trophy,
-      iconColor: "text-green-600"
+      iconColor: "text-orange-500"
     }
   ]
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                <div className="h-4 bg-muted rounded w-24"></div>
-              </CardTitle>
-              <div className="h-4 w-4 bg-muted rounded"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-8 bg-muted rounded w-20 mb-1"></div>
-              <div className="h-3 bg-muted rounded w-16"></div>
+  const renderCards = (cards: any[]) => (
+    <div className="grid grid-cols-2 gap-6 max-w-4xl mx-auto">
+      {cards.map((card, index) => {
+        const IconComponent = card.icon
+        return (
+          <Card key={index} className="h-32">
+            <CardContent className="flex items-center justify-center h-full p-6">
+              <div className="flex items-center space-x-4 w-full">
+                <div className={`p-3 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0`}>
+                  <IconComponent className={`h-7 w-7 ${card.iconColor}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xl font-bold truncate">{card.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
-        ))}
+        )
+      })}
+    </div>
+  )
+
+  if (isLoading) {
+    return (
+      <div>
+        <h4 className="text-sm font-medium text-muted-foreground mb-3">Performance Meta Ads</h4>
+        <div className="grid grid-cols-2 gap-6 max-w-4xl mx-auto">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="h-32">
+              <CardContent className="flex items-center justify-center h-full p-6">
+                <div className="flex items-center space-x-4 w-full">
+                  <Skeleton className="h-12 w-12 rounded-lg flex-shrink-0" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-6 w-24" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {cards.map((card, index) => {
-        const Icon = card.icon
-        return (
-          <Card key={index} className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              <Icon className={`h-4 w-4 ${card.iconColor}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">
-                {card.value}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {card.subtitle}
-              </p>
-            </CardContent>
-          </Card>
-        )
-      })}
+    <div>
+      <h4 className="text-sm font-medium text-muted-foreground mb-3">Performance Meta Ads</h4>
+      {renderCards(metaAdsCards)}
     </div>
   )
 }

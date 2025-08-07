@@ -1,5 +1,16 @@
 import { TipoPlano } from '@/types/database'
 
+// Adicionar tipo Cliente para usar na função
+interface Cliente {
+  id: number
+  closer_id?: number
+  sdr_id?: number
+  etapa: string
+  valor_venda?: number
+  tipo_plano?: string
+  criado_em?: string
+}
+
 // Configurações do novo sistema de comissionamento
 export interface ComissaoSDRConfig {
   reuniao_qualificada: number // R$5
@@ -67,8 +78,8 @@ export interface ComissaoCloserResult {
   comissaoVendas: number
   bonusMeta: number
   total: number
+  mrrGerado: number;
   detalhesVendas: VendaDetalhe[]
-  mrrTotal: number
   percentualMeta: number
 }
 
@@ -111,15 +122,15 @@ function getDefaultComissaoConfig(): NovaComissaoConfig {
       }
     },
     planos: {
-      mensal: { valor_base: 100, periodo_meses: 1, fator_bonificacao: 50 },
-      trimestral: { valor_base: 270, periodo_meses: 3, fator_bonificacao: 75 },
-      semestral: { valor_base: 480, periodo_meses: 6, fator_bonificacao: 100 },
-      anual: { valor_base: 840, periodo_meses: 12, fator_bonificacao: 125 }
+      mensal: { valor_base: 99.90, periodo_meses: 1, fator_bonificacao: 50 },
+      trimestral: { valor_base: 269.80, periodo_meses: 3, fator_bonificacao: 75 }, // 299.70 - 29.90
+      semestral: { valor_base: 479.90, periodo_meses: 6, fator_bonificacao: 100 }, // 599.40 - 119.50
+      anual: { valor_base: 839.90, periodo_meses: 12, fator_bonificacao: 125 } // 1198.80 - 358.90
     },
     checkpoints: {
-      checkpoint_1: 1/3, // 0-19% = 1/3 do valor
-      checkpoint_2: 2/3, // 20-64% = 2/3 do valor  
-      checkpoint_3: 1.0  // 65-100%+ = valor total
+      checkpoint_1: 1/3, // 20-64% = 1/3 do valor
+      checkpoint_2: 2/3, // 65-99% = 2/3 do valor  
+      checkpoint_3: 1.0  // 100%+ = valor total
     }
   }
 }
@@ -131,10 +142,11 @@ export function setNovaComissaoConfig(config: NovaComissaoConfig) {
 }
 
 // Função para calcular checkpoint baseado no percentual da meta
-export function calculateCheckpoint(percentualMeta: number): 'checkpoint_1' | 'checkpoint_2' | 'checkpoint_3' {
-  if (percentualMeta < 20) return 'checkpoint_1'
-  if (percentualMeta < 65) return 'checkpoint_2'
-  return 'checkpoint_3'
+export function calculateCheckpoint(percentualMeta: number): 'none' | 'checkpoint_1' | 'checkpoint_2' | 'checkpoint_3' {
+  if (percentualMeta < 20) return 'none'           // Abaixo de 20% = sem comissão
+  if (percentualMeta < 65) return 'checkpoint_1'   // 20-64% = checkpoint 1 (1/3)
+  if (percentualMeta < 100) return 'checkpoint_2'  // 65-99% = checkpoint 2 (2/3)
+  return 'checkpoint_3'                            // 100%+ = checkpoint 3 (100%)
 }
 
 // Função para calcular MRR de uma venda
@@ -152,8 +164,15 @@ export function calculateComissaoSDR(
   percentualMeta: number,
   config: ComissaoSDRConfig
 ): ComissaoSDRResult {
-  const comissaoBase = (reunioesQualificadas * config.reuniao_qualificada) + 
-                      (reunioesGeraramVenda * config.reuniao_gerou_venda)
+  // Calcular o checkpoint e o fator correspondente
+  const checkpoint = calculateCheckpoint(percentualMeta)
+  const fatorCheckpoint = checkpoint === 'none' ? 0 :
+                         checkpoint === 'checkpoint_1' ? 1/3 :
+                         checkpoint === 'checkpoint_2' ? 2/3 : 1
+  
+  // Aplicar o fator do checkpoint nos valores das comissões
+  const comissaoBase = (reunioesQualificadas * config.reuniao_qualificada * fatorCheckpoint) + 
+                      (reunioesGeraramVenda * config.reuniao_gerou_venda * fatorCheckpoint)
   
   const bonus = percentualMeta >= 100 ? config.bonus_meta_100 : 0
   
@@ -181,11 +200,12 @@ export function calculateComissaoCloser(
   planosConfig: PlanoConfig
 ): ComissaoCloserResult {
   const checkpoint = calculateCheckpoint(percentualMeta)
-  const fatorCheckpoint = checkpoint === 'checkpoint_1' ? 1/3 :
+  const fatorCheckpoint = checkpoint === 'none' ? 0 :
+                         checkpoint === 'checkpoint_1' ? 1/3 :
                          checkpoint === 'checkpoint_2' ? 2/3 : 1
   
   let comissaoVendas = 0
-  let mrrTotal = 0
+  let mrrGerado = 0
   const detalhesVendas: VendaDetalhe[] = []
 
   vendas.forEach(venda => {
@@ -194,7 +214,7 @@ export function calculateComissaoCloser(
 
     // Calcular MRR
     const mrr = calculateMRR(venda.valor_venda, venda.tipo_plano, planosConfig)
-    mrrTotal += mrr
+    mrrGerado += mrr
 
     // Calcular bonificação por venda acima do valor base
     const percentualAcima = venda.valor_base > 0 ? ((venda.valor_venda - venda.valor_base) / venda.valor_base) * 100 : 0
@@ -228,13 +248,15 @@ export function calculateComissaoCloser(
     bonusMeta = config.bonus_meta.meta_100
   }
 
+  const total = comissaoVendas + bonusMeta
+
   return {
+    total,
     comissaoVendas,
     bonusMeta,
-    total: comissaoVendas + bonusMeta,
+    mrrGerado,
     detalhesVendas,
-    mrrTotal,
-    percentualMeta
+    percentualMeta,
   }
 }
 
@@ -249,4 +271,104 @@ export function getCheckpointInfo(percentualMeta: number): { name: string; color
   } else {
     return { name: 'Expert', color: 'bg-green-500', range: '100%+', fator: 1 }
   }
+}
+
+// Função para calcular comissão do SDR baseado nos clientes e reuniões
+export async function calculateComissaoSDRFromClientes(
+  clientes: any[],
+  reunioes: any[],
+  sdrId: number,
+  percentualMeta: number,
+  config: ComissaoSDRConfig
+): Promise<ComissaoSDRResult> {
+  // Filtrar reuniões do SDR
+  const reunioesSDR = reunioes.filter(reuniao => reuniao.sdr_id === sdrId)
+  
+  // Contar reuniões qualificadas (todas as reuniões do SDR)
+  const reunioesQualificadas = reunioesSDR.length
+  
+  // Contar reuniões que geraram venda (clientes com etapa "Vendas Realizadas" e valor_venda preenchido)
+  const clientesSDR = clientes.filter(cliente => cliente.sdr_id === sdrId)
+  const reunioesGeraramVenda = clientesSDR.filter(cliente => 
+    cliente.etapa === 'Vendas Realizadas' && 
+    cliente.valor_venda && 
+    cliente.valor_venda > 0
+  ).length
+
+  return calculateComissaoSDR(reunioesQualificadas, reunioesGeraramVenda, percentualMeta, config)
+}
+
+// Função para calcular comissão do Closer baseado nos clientes
+export function calculateComissaoCloserFromClientes(
+  clientes: Cliente[],
+  closerId: number,
+  percentualMeta: number,
+  config: ComissaoCloserConfig
+): ComissaoCloserResult {
+  const vendasCloser = clientes.filter(c =>
+    c.closer_id === closerId &&
+    c.etapa === 'Vendas Realizadas' &&
+    c.valor_venda && c.valor_venda > 0
+  );
+
+  // Calcular checkpoint baseado no percentual da meta
+  const checkpoint = calculateCheckpoint(percentualMeta)
+  const fatorCheckpoint = checkpoint === 'none' ? 0 :
+                         checkpoint === 'checkpoint_1' ? 1/3 :
+                         checkpoint === 'checkpoint_2' ? 2/3 : 1
+
+  let comissaoVendas = 0;
+  let mrrGerado = 0;
+  const detalhesVendas: VendaDetalhe[] = [];
+
+  for (const venda of vendasCloser) {
+    const valorVenda = venda.valor_venda || 0;
+    const tipoPlano = venda.tipo_plano || 'mensal';
+    
+    // Usar valores fixos com checkpoint
+    const valorFixo = config.valores_fixos[tipoPlano as keyof typeof config.valores_fixos] || 0;
+    const valorFixoComCheckpoint = valorFixo * fatorCheckpoint;
+    comissaoVendas += valorFixoComCheckpoint;
+
+    const valorMensal = tipoPlano === 'mensal' ? valorVenda :
+                       tipoPlano === 'trimestral' ? valorVenda / 3 :
+                       tipoPlano === 'semestral' ? valorVenda / 6 :
+                       tipoPlano === 'anual' ? valorVenda / 12 : 0;
+    mrrGerado += valorMensal;
+
+    // Adicionar detalhes da venda
+    detalhesVendas.push({
+      tipo_plano: tipoPlano,
+      valor_venda: valorVenda,
+      valor_base: 0, // Não temos valor base na estrutura Cliente
+      valor_fixo: valorFixo,
+      valor_fixo_checkpoint: valorFixoComCheckpoint,
+      percentual_acima: 0, // Sem valor base, não há percentual acima
+      bonificacao: 0, // Sem bonificação por enquanto
+      comissao_total: valorFixoComCheckpoint
+    });
+  }
+
+  const bonusMeta = percentualMeta >= 100 ? config.bonus_meta.meta_100 : 0;
+  const total = comissaoVendas + bonusMeta;
+
+  return {
+    total,
+    comissaoVendas,
+    bonusMeta,
+    mrrGerado,
+    detalhesVendas,
+    percentualMeta,
+  };
+}
+
+// Função auxiliar para obter fator de bonificação por tipo de plano
+function getFatorBonificacao(tipoPlano: string): number {
+  const fatores = {
+    'mensal': 50,     // 50%
+    'trimestral': 75, // 75%
+    'semestral': 100, // 100%
+    'anual': 125      // 125%
+  }
+  return fatores[tipoPlano as keyof typeof fatores] || 50
 }

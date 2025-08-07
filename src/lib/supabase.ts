@@ -339,9 +339,9 @@ export async function getMonthlySalesData() {
         const date = new Date(dateToUse)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         const monthLabel = date.toLocaleDateString('pt-BR', { 
-          month: 'short', 
+          month: 'long', 
           year: '2-digit' 
-        }).replace('.', ' de ')
+        }).replace(',', ' de')
         
         if (!monthlyData.has(monthKey)) {
           monthlyData.set(monthKey, {
@@ -359,8 +359,19 @@ export async function getMonthlySalesData() {
     // Convert to array and sort by date
     return Array.from(monthlyData.values())
       .sort((a, b) => {
-        const aDate = new Date(a.month.replace(' de ', '/'))
-        const bDate = new Date(b.month.replace(' de ', '/'))
+        // Parse "agosto de 25" format to proper date
+        const parseMonth = (monthStr: string) => {
+          const [monthName, year] = monthStr.split(' de ')
+          const monthNames = [
+            'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+            'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+          ]
+          const monthIndex = monthNames.indexOf(monthName.toLowerCase())
+          return new Date(2000 + parseInt(year), monthIndex)
+        }
+        
+        const aDate = parseMonth(a.month)
+        const bDate = parseMonth(b.month)
         return aDate.getTime() - bDate.getTime()
       })
   } catch (error) {
@@ -453,16 +464,25 @@ export async function getMonthlySalesSummary() {
 }
 
 // Get funnel data based on current client stages
-export async function getFunnelData() {
+export async function getFunnelData(startDate?: string, endDate?: string) {
   if (!isSupabaseConfigured() || !supabase) {
     console.warn('Supabase not configured. Please add environment variables.')
     return []
   }
 
   try {
-    const { data: clientes, error } = await supabase
+    let query = supabase
       .from('clientes')
-      .select('etapa')
+      .select('etapa, valor_venda, criado_em')
+    
+    // Apply date filters if provided
+    if (startDate && endDate) {
+      query = query
+        .gte('criado_em', startDate)
+        .lte('criado_em', endDate + 'T23:59:59')
+    }
+    
+    const { data: clientes, error } = await query
     
     if (error) {
       console.error('Error fetching funnel data:', error)
@@ -476,23 +496,37 @@ export async function getFunnelData() {
     // Count clients by stage
     const stageCounts = {
       'Lead': 0,
-      'Leads Qualificados': 0,
       'Agendados': 0,
       'Reunioes Feitas': 0,
-      'Vendas Realizadas': 0
+      'Vendas Realizadas': 0,
+      'Reunioes sem Fechamento': 0, // Reuniões realizadas mas sem venda
     }
 
     clientes.forEach(cliente => {
-      if (stageCounts.hasOwnProperty(cliente.etapa)) {
-        stageCounts[cliente.etapa as keyof typeof stageCounts]++
+      if (cliente.etapa === 'Lead') {
+        stageCounts['Lead']++
+      } else if (cliente.etapa === 'Leads Qualificados') {
+        // Leads qualificados agora contam como leads normais
+        stageCounts['Lead']++
+      } else if (cliente.etapa === 'Agendados') {
+        stageCounts['Agendados']++
+      } else if (cliente.etapa === 'Reunioes Feitas') {
+        // Se tem valor de venda, é venda realizada, senão é reunião sem fechamento
+        if (cliente.valor_venda && cliente.valor_venda > 0) {
+          stageCounts['Vendas Realizadas']++
+        } else {
+          stageCounts['Reunioes sem Fechamento']++
+        }
+      } else if (cliente.etapa === 'Vendas Realizadas') {
+        stageCounts['Vendas Realizadas']++
       }
     })
 
     const totalLeads = clientes.length
-    const leadsQualificados = stageCounts['Leads Qualificados']
     const agendados = stageCounts['Agendados']
     const reunioesFeitas = stageCounts['Reunioes Feitas']
     const vendasRealizadas = stageCounts['Vendas Realizadas']
+    const reunioesSemFechamento = stageCounts['Reunioes sem Fechamento']
 
     return [
       {
@@ -500,12 +534,6 @@ export async function getFunnelData() {
         value: totalLeads,
         percentage: 100,
         color: "#22c55e"
-      },
-      {
-        stage: "Leads Qualificados",
-        value: leadsQualificados,
-        percentage: totalLeads > 0 ? (leadsQualificados / totalLeads) * 100 : 0,
-        color: "#16a34a"
       },
       {
         stage: "Agendados",
@@ -524,10 +552,16 @@ export async function getFunnelData() {
         value: vendasRealizadas,
         percentage: totalLeads > 0 ? (vendasRealizadas / totalLeads) * 100 : 0,
         color: "#14532d"
+      },
+      {
+        stage: "Reuniões sem Fechamento",
+        value: reunioesSemFechamento,
+        percentage: totalLeads > 0 ? (reunioesSemFechamento / totalLeads) * 100 : 0,
+        color: "#dc2626"
       }
     ]
   } catch (error) {
-    console.error('Error in getFunnelData:', error)
+    console.error('Error loading funnel data:', error)
     return []
   }
 }
@@ -562,16 +596,16 @@ export async function getLeadsEvolutionData() {
         const date = new Date(cliente.criado_em)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         const monthLabel = date.toLocaleDateString('pt-BR', { 
-          month: 'short', 
+          month: 'long', 
           year: '2-digit' 
-        }).replace('.', ' de ')
+        }).replace(',', ' de')
         
         if (!monthlyLeads.has(monthKey)) {
           monthlyLeads.set(monthKey, {
             month: monthLabel,
             leadsTotal: 0,
-            leadsQualificados: 0,
-            reunioesMarcadas: 0,
+            reunioesAgendadas: 0,
+            reunioesRealizadas: 0,
             vendas: 0
           })
         }
@@ -579,14 +613,14 @@ export async function getLeadsEvolutionData() {
         const monthData = monthlyLeads.get(monthKey)
         monthData.leadsTotal++
         
-        // Count qualified leads (beyond first contact)
-        if (['Leads Qualificados', 'Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
-          monthData.leadsQualificados++
+        // Count scheduled meetings (agendados)
+        if (['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
+          monthData.reunioesAgendadas++
         }
         
-        // Count meetings scheduled
-        if (['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
-          monthData.reunioesMarcadas++
+        // Count completed meetings (reuniões realizadas)
+        if (['Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
+          monthData.reunioesRealizadas++
         }
         
         // Count sales
@@ -600,8 +634,19 @@ export async function getLeadsEvolutionData() {
 
     return Array.from(monthlyLeads.values())
       .sort((a, b) => {
-        const aDate = new Date(a.month.replace(' de ', '/'))
-        const bDate = new Date(b.month.replace(' de ', '/'))
+        // Parse "agosto de 25" format to proper date
+        const parseMonth = (monthStr: string) => {
+          const [monthName, year] = monthStr.split(' de ')
+          const monthNames = [
+            'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+            'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+          ]
+          const monthIndex = monthNames.indexOf(monthName.toLowerCase())
+          return new Date(2000 + parseInt(year), monthIndex)
+        }
+        
+        const aDate = parseMonth(a.month)
+        const bDate = parseMonth(b.month)
         return aDate.getTime() - bDate.getTime()
       })
   } catch (error) {
@@ -1484,49 +1529,126 @@ export function getWorkingDaysInMonth(year: number, month: number): number {
 }
 
 // Função para obter estatísticas avançadas do dashboard
-export async function getAdvancedDashboardStats() {
-  if (!isSupabaseConfigured() || !supabase) {
-    // Mock data para desenvolvimento
-    const currentDate = new Date()
-    const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
-    const currentDay = currentDate.getDate()
-    const workingDaysElapsed = Math.min(currentDay, workingDays)
+export async function getAdvancedDashboardStats(periodo?: string, customStartDate?: string, customEndDate?: string) {
+  // Definir datas baseadas no período
+  let dataInicio: string | null = null
+  let dataFim: string | null = null
+  
+  if (periodo === 'custom' && customStartDate && customEndDate) {
+    dataInicio = customStartDate
+    dataFim = customEndDate
+  } else if (periodo && periodo !== 'all') {
+    const agora = new Date()
+    const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate())
     
-    return {
-      totalFaturamento: 94250,
-      metaMensal: 50000,
-      metaDiaria: 50000 / workingDays,
-      faturamentoDiario: 6200,
-      progressoMetaDiaria: (6200 / (50000 / workingDays)) * 100,
-      diasUteis: workingDays,
-      diasUteisDecorridos: workingDaysElapsed,
-      ticketMedio: 3927.08,
-      totalVendas: 24,
-      totalInvestido: 41054.40,
-      cac: 1710.60,
-      roas: 2.3,
-      clientesAdquiridos: 24,
-      totalReunioesMarcadas: 35,
-      metaReunioesSdr: 50,
-      planosMensais: 8,
-      planosTrimestrais: 6,
-      planosSemestrais: 5,
-      planosAnuais: 5
+    switch (periodo) {
+      case 'hoje':
+        dataInicio = hoje.toISOString().split('T')[0]
+        break
+      case 'ontem':
+        const ontem = new Date(hoje)
+        ontem.setDate(ontem.getDate() - 1)
+        dataInicio = ontem.toISOString().split('T')[0]
+        dataFim = hoje.toISOString().split('T')[0]
+        break
+      case 'ultimos7':
+        const setedays = new Date(hoje)
+        setedays.setDate(setedays.getDate() - 7)
+        dataInicio = setedays.toISOString().split('T')[0]
+        break
+      case 'ultimos30':
+        const trintaDias = new Date(hoje)
+        trintaDias.setDate(trintaDias.getDate() - 30)
+        dataInicio = trintaDias.toISOString().split('T')[0]
+        break
+      case 'esteMes':
+        dataInicio = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString().split('T')[0]
+        break
+      case 'mesPassado':
+        const mesPassado = new Date(agora.getFullYear(), agora.getMonth() - 1, 1)
+        const inicioEsteMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+        dataInicio = mesPassado.toISOString().split('T')[0]
+        dataFim = inicioEsteMes.toISOString().split('T')[0]
+        break
     }
   }
 
   try {
-    const [clientes, metas, metasSdr, reunioes] = await Promise.all([
-      supabase.from('clientes').select('*'),
+    // Verificar se Supabase está configurado
+    if (!isSupabaseConfigured() || !supabase) {
+      console.error('Supabase não está configurado. Verifique as variáveis de ambiente.')
+      throw new Error('Supabase não configurado')
+    }
+
+    // Construir queries
+    let clientesQuery = supabase.from('clientes').select('*')
+    if (dataInicio) {
+      clientesQuery = clientesQuery.gte('criado_em', dataInicio)
+    }
+    if (dataFim) {
+      clientesQuery = clientesQuery.lt('criado_em', dataFim)
+    }
+
+    console.log('Fetching dashboard data...')
+
+    const [clientesResult, metasResult, reunioesResult] = await Promise.all([
+      clientesQuery,
       supabase.from('metas').select('*').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1),
-      supabase.from('metas_sdr').select('*').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1),
       supabase.from('reunioes').select('*')
     ])
 
-    const vendas = clientes.data?.filter(c => c.data_fechamento && c.valor_venda) || []
+    // Log específico para cada query
+    if (clientesResult.error) {
+      console.error('Error fetching clientes:', clientesResult.error)
+    }
+    if (metasResult.error) {
+      console.error('Error fetching metas:', metasResult.error)
+    }
+    if (reunioesResult.error) {
+      console.error('Error fetching reunioes:', reunioesResult.error)
+    }
+
+    if (clientesResult.error || metasResult.error || reunioesResult.error) {
+      throw new Error('Erro ao buscar dados do banco')
+    }
+
+    const clientes = clientesResult
+    const metas = metasResult
+    const reunioes = reunioesResult
+
+    // Filtrar vendas - considerar tanto por data_fechamento quanto por etapa
+    const vendas = clientes.data?.filter(c => 
+      (c.data_fechamento && c.valor_venda) || 
+      (c.etapa === 'Vendas Realizadas' && c.valor_venda)
+    ) || []
+    
+    // Criar reuniões automaticamente para vendas que têm SDR mas não têm reunião
+    for (const venda of vendas) {
+      if (venda.sdr_id && venda.etapa === 'Vendas Realizadas') {
+        await createReuniaoFromVenda(venda)
+      }
+    }
+    
+        // Calcular faturamento total (valor das vendas)
     const totalFaturamento = vendas.reduce((sum, v) => sum + (v.valor_venda || 0), 0)
-    const metaMensal = metas.data?.[0]?.valor_meta || 50000
-    const metaReunioesSdr = metasSdr.data?.[0]?.valor_meta || 50
+    
+    // Calcular MRR total (valor recorrente mensal)
+    const totalMRR = vendas.reduce((sum, v) => {
+      const valorVenda = v.valor_venda || 0
+      switch (v.tipo_plano) {
+        case 'trimestral':
+          return sum + (valorVenda / 3)
+        case 'semestral':
+          return sum + (valorVenda / 6)
+        case 'anual':
+          return sum + (valorVenda / 12)
+        default: // mensal
+          return sum + valorVenda
+      }
+    }, 0)
+    
+    const metaMensal = metas.data?.[0]?.valor_meta || 10000
+    const metaReunioesSdr = metas.data?.[0]?.meta_sdr || 50
     
     // Contar planos por tipo
     const planosMensais = vendas.filter(v => v.tipo_plano === 'mensal').length
@@ -1534,39 +1656,58 @@ export async function getAdvancedDashboardStats() {
     const planosSemestrais = vendas.filter(v => v.tipo_plano === 'semestral').length
     const planosAnuais = vendas.filter(v => v.tipo_plano === 'anual').length
     
-    // Contar reuniões marcadas do mês atual
+    // Contar reuniões marcadas do período
+    let reunioesFiltradas = reunioes.data || []
+    if (dataInicio) {
+      reunioesFiltradas = reunioesFiltradas.filter(r => {
+        if (!r.data_reuniao) return false
+        const reuniaoDate = r.data_reuniao
+        if (dataFim) {
+          return reuniaoDate >= dataInicio && reuniaoDate < dataFim
+        }
+        return reuniaoDate >= dataInicio
+      })
+    }
+    
+    // Se não há reuniões registradas, mas há vendas, considerar cada venda como uma reunião que gerou resultado
+    if (reunioesFiltradas.length === 0 && vendas.length > 0) {
+      console.log('Não há reuniões registradas, mas há vendas. Considerando vendas como reuniões.')
+      reunioesFiltradas = vendas.map((venda, index) => ({
+        id: `venda_${venda.id}`,
+        sdr_id: venda.sdr_id,
+        tipo: 'gerou_venda',
+        data_reuniao: venda.data_fechamento || venda.atualizado_em || new Date().toISOString().split('T')[0]
+      }))
+    }
+    
+    const totalReunioesMarcadas = reunioesFiltradas.length
+    
     const currentDate = new Date()
-    const currentMonth = currentDate.getMonth() + 1
-    const currentYear = currentDate.getFullYear()
-    
-    const reunioesDoMes = reunioes.data?.filter(r => {
-      if (!r.data_reuniao) return false
-      const reuniaoDate = new Date(r.data_reuniao)
-      return reuniaoDate.getMonth() + 1 === currentMonth && reuniaoDate.getFullYear() === currentYear
-    }) || []
-    
-    const totalReunioesMarcadas = reunioesDoMes.length
-    
     const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
     const currentDay = currentDate.getDate()
     const workingDaysElapsed = Math.min(currentDay, workingDays)
     
     const metaDiaria = metaMensal / workingDays
-    const faturamentoDiario = totalFaturamento / workingDaysElapsed
+    const faturamentoDiario = workingDaysElapsed > 0 ? totalFaturamento / workingDaysElapsed : 0
+    
+    // O investimento total agora virá do estado do componente, não mais de valores fixos aqui.
+    // O cálculo será feito no frontend com base nos dados do Meta Ads.
+    const totalInvestidoPeriodo = 0 // Será substituído pelo valor real no frontend
     
     return {
       totalFaturamento,
+      totalMRR, // Adicionar MRR calculado corretamente
       metaMensal,
       metaDiaria,
       faturamentoDiario,
-      progressoMetaDiaria: (faturamentoDiario / metaDiaria) * 100,
+      progressoMetaDiaria: metaDiaria > 0 ? (faturamentoDiario / metaDiaria) * 100 : 0,
       diasUteis: workingDays,
       diasUteisDecorridos: workingDaysElapsed,
       ticketMedio: vendas.length > 0 ? totalFaturamento / vendas.length : 0,
       totalVendas: vendas.length,
-      totalInvestido: 41054.40, // Mock data - integrar com Meta Ads
-      cac: vendas.length > 0 ? 41054.40 / vendas.length : 0,
-      roas: 41054.40 > 0 ? totalFaturamento / 41054.40 : 0,
+      totalInvestido: totalInvestidoPeriodo,
+      cac: 0, // Será calculado no frontend
+      roas: 0, // Será calculado no frontend
       clientesAdquiridos: vendas.length,
       totalReunioesMarcadas,
       metaReunioesSdr,
@@ -1577,28 +1718,79 @@ export async function getAdvancedDashboardStats() {
     }
   } catch (error) {
     console.error('Error getting advanced dashboard stats:', error)
-    return {
-      totalFaturamento: 0,
-      metaMensal: 0,
-      metaDiaria: 0,
-      faturamentoDiario: 0,
-      progressoMetaDiaria: 0,
-      diasUteis: 0,
-      diasUteisDecorridos: 0,
-      ticketMedio: 0,
-      totalVendas: 0,
-      totalInvestido: 0,
-      cac: 0,
-      roas: 0,
-      clientesAdquiridos: 0,
-      totalReunioesMarcadas: 0,
-      metaReunioesSdr: 50,
-      planosMensais: 0,
-      planosTrimestrais: 0,
-      planosSemestrais: 0,
-      planosAnuais: 0
-    }
+    
+    // Em caso de erro, retornar dados zerados
+    console.error('Erro ao buscar dados do dashboard. Verifique a conexão com o banco.')
+    throw error
+    
+
   }
+}
+
+// Função para buscar planos do Supabase
+export async function getPlanos() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Using mock data.')
+    // Mock data baseado na estrutura fornecida
+    return [
+      {
+        id: 1,
+        nome: 'Basic',
+        periodo: 'Mensal',
+        valor: 99.90,
+        desconto: 0,
+        trial: true,
+        obs: '',
+        nivel: 1,
+        qtde_dias_trial: 5
+      },
+      {
+        id: 2,
+        nome: 'Basic',
+        periodo: 'Trimestral',
+        valor: 299.70,
+        desconto: 29.90,
+        trial: true,
+        obs: '(10% OFF)',
+        nivel: 1,
+        qtde_dias_trial: 5
+      },
+      {
+        id: 3,
+        nome: 'Basic',
+        periodo: 'Semestral',
+        valor: 599.40,
+        desconto: 119.50,
+        trial: true,
+        obs: '(20% OFF)',
+        nivel: 1,
+        qtde_dias_trial: 5
+      },
+      {
+        id: 4,
+        nome: 'Basic',
+        periodo: 'Anual',
+        valor: 1198.80,
+        desconto: 358.90,
+        trial: true,
+        obs: '(30% OFF)',
+        nivel: 1,
+        qtde_dias_trial: 5
+      }
+    ]
+  }
+
+  const { data, error } = await supabase
+    .from('planos')
+    .select('id, nome, periodo, valor, desconto, trial, obs, nivel, qtde_dias_trial')
+    .order('id', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching planos:', error)
+    return []
+  }
+
+  return data || []
 }
 
 // Configurações do novo sistema de comissionamento
@@ -1723,19 +1915,28 @@ function calculateMRR(valorBase: number, tipoPlano: string): number {
 }
 
 // Função para buscar top closers do banco
-export async function getTopClosers(): Promise<TopCloser[]> {
+export async function getTopClosers(dataInicio?: string, dataFim?: string): Promise<TopCloser[]> {
   if (!isSupabaseConfigured() || !supabase) {
     return []
   }
 
   try {
-    // Buscar vendas sem JOIN
-    const { data: vendas, error } = await supabase
+    // Buscar vendas sem JOIN com filtro por período
+    let vendasQuery = supabase
       .from('clientes')
       .select('*')
       .not('data_fechamento', 'is', null)
       .not('valor_venda', 'is', null)
       .not('closer_id', 'is', null)
+    
+    if (dataInicio) {
+      vendasQuery = vendasQuery.gte('data_fechamento', dataInicio)
+    }
+    if (dataFim) {
+      vendasQuery = vendasQuery.lte('data_fechamento', dataFim)
+    }
+    
+    const { data: vendas, error } = await vendasQuery
 
     if (error) {
       console.error('Error fetching closers:', error)
@@ -1836,16 +2037,25 @@ export async function getTopClosers(): Promise<TopCloser[]> {
 }
 
 // Função para buscar top SDRs do banco
-export async function getTopSDRs(): Promise<TopSDR[]> {
+export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise<TopSDR[]> {
   if (!isSupabaseConfigured() || !supabase) {
     return []
   }
 
   try {
-    // Buscar reuniões com dados do colaborador (sem JOIN first para testar)
-    const { data: reunioes, error: reunioesError } = await supabase
+    // Buscar reuniões com filtro por período
+    let reunioesQuery = supabase
       .from('reunioes')
       .select('*')
+    
+    if (dataInicio) {
+      reunioesQuery = reunioesQuery.gte('data_reuniao', dataInicio)
+    }
+    if (dataFim) {
+      reunioesQuery = reunioesQuery.lte('data_reuniao', dataFim)
+    }
+    
+    const { data: reunioes, error: reunioesError } = await reunioesQuery
 
     if (reunioesError) {
       console.error('Error fetching reunioes:', reunioesError)
@@ -1862,13 +2072,24 @@ export async function getTopSDRs(): Promise<TopSDR[]> {
       return []
     }
 
-    // Buscar vendas geradas por SDR (sem JOIN também)
-    const { data: vendas, error: vendasError } = await supabase
+    // Buscar vendas geradas por SDR (sem JOIN também) com filtro por período
+    let vendasQuery = supabase
       .from('clientes')
       .select('*')
-      .not('data_fechamento', 'is', null)
+      .eq('etapa', 'Vendas Realizadas')
       .not('valor_venda', 'is', null)
       .not('sdr_id', 'is', null)
+    
+    if (dataInicio) {
+      vendasQuery = vendasQuery.gte('data_fechamento', dataInicio)
+    }
+    if (dataFim) {
+      vendasQuery = vendasQuery.lte('data_fechamento', dataFim)
+    }
+    
+    const { data: vendas, error: vendasError } = await vendasQuery
+
+
 
     if (vendasError) {
       console.error('Error fetching vendas for SDR:', vendasError)
@@ -1922,6 +2143,17 @@ export async function getTopSDRs(): Promise<TopSDR[]> {
               valorBase: venda.valor_base_plano || venda.valor_venda || 0,
               tipo: venda.tipo_plano || 'mensal'
             })
+          } else {
+            sdrsMap.set(sdrId, {
+              id: sdrId,
+              nome: colaborador.nome,
+              reunioes: [],
+              vendas: [{
+                valor: venda.valor_venda || 0,
+                valorBase: venda.valor_base_plano || venda.valor_venda || 0,
+                tipo: venda.tipo_plano || 'mensal'
+              }]
+            })
           }
         }
       })
@@ -1946,11 +2178,331 @@ export async function getTopSDRs(): Promise<TopSDR[]> {
       }
     })
 
-    // Ordenar por MRR gerado
-    return topSDRs.sort((a, b) => b.totalMRRGerado - a.totalMRRGerado)
+    // Ordenar por número total de reuniões (não por MRR)
+    return topSDRs.sort((a, b) => b.totalReunioes - a.totalReunioes)
     
   } catch (error) {
     console.error('Error in getTopSDRs:', error)
     return []
+  }
+}
+
+// Função para buscar todos os clientes
+export async function getAllClientes() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Using mock data.')
+    // Mock data para desenvolvimento
+    return [
+      {
+        id: 1,
+        nome: 'Cliente Teste',
+        sdr_id: 1,
+        closer_id: 2,
+        etapa: 'Vendas Realizadas',
+        valor_venda: 150.00,
+        tipo_plano: 'mensal',
+        valor_base_plano: 99.90,
+        data_fechamento: '2025-01-06'
+      }
+    ]
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('*')
+      .order('criado_em', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching clientes:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Error fetching clientes:', error)
+    return []
+  }
+}
+
+// Funções para gerenciar reuniões
+export async function createReuniao(clienteId: number, sdrId: number, tipo: 'qualificada' | 'gerou_venda', dataReuniao: Date) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return null
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('reunioes')
+      .insert([
+        {
+          cliente_id: clienteId,
+          sdr_id: sdrId,
+          tipo: tipo,
+          data_reuniao: dataReuniao.toISOString().split('T')[0]
+        }
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating reuniao:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error creating reuniao:', error)
+    return null
+  }
+}
+
+export async function getReunioesBySDR(sdrId: number) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return []
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('reunioes')
+      .select('*')
+      .eq('sdr_id', sdrId)
+
+    if (error) {
+      console.error('Error fetching reunioes:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Error fetching reunioes:', error)
+    return []
+  }
+}
+
+export async function getAllReunioes() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return []
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('reunioes')
+      .select('*')
+
+    if (error) {
+      console.error('Error fetching all reunioes:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Error fetching all reunioes:', error)
+    return []
+  }
+}
+
+// Função para buscar estatísticas reais para Meta Ads Performance
+// Função para calcular meta individual de cada colaborador
+export async function getMetasIndividuais() {
+  if (!isSupabaseConfigured() || !supabase) {
+    return {
+      metaIndividualCloser: 200000, // Meta padrão
+      metaIndividualSDR: 25 // Meta padrão
+    }
+  }
+
+  try {
+    // Buscar meta atual e colaboradores
+    const [metasResult, metasSdrResult, colaboradoresResult] = await Promise.all([
+      getCurrentMonthMeta(),
+      getCurrentMonthMetaSdr(),
+      supabase.from('colaboradores').select('*')
+    ])
+
+    if (colaboradoresResult.error) {
+      console.error('Error fetching colaboradores:', colaboradoresResult.error)
+      return {
+        metaIndividualCloser: 200000,
+        metaIndividualSDR: 25
+      }
+    }
+
+    const colaboradores = colaboradoresResult.data || []
+    const closers = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
+    const sdrs = colaboradores.filter(c => c.funcao.toLowerCase() === 'sdr')
+
+    const metaComercial = metasResult?.valor_meta || 200000
+    const metaSDR = metasSdrResult?.valor_meta || 50
+
+    return {
+      metaIndividualCloser: closers.length > 0 ? metaComercial / closers.length : metaComercial,
+      metaIndividualSDR: sdrs.length > 0 ? metaSDR / sdrs.length : metaSDR,
+      totalClosers: closers.length,
+      totalSDRs: sdrs.length
+    }
+  } catch (error) {
+    console.error('Error calculating individual metas:', error)
+    return {
+      metaIndividualCloser: 200000,
+      metaIndividualSDR: 25
+    }
+  }
+}
+
+// Cache para evitar criar reuniões duplicadas na mesma sessão
+const reunioesCriadas = new Set<string>()
+
+// Função para criar reunião automaticamente quando venda é fechada
+async function createReuniaoFromVenda(venda: any) {
+  if (!isSupabaseConfigured() || !supabase || !venda.sdr_id) {
+    return
+  }
+
+  const cacheKey = `${venda.id}_${venda.sdr_id}`
+  if (reunioesCriadas.has(cacheKey)) {
+    return // Já foi processada nesta sessão
+  }
+
+  try {
+    // Verificar se já existe reunião para esta venda - query mais simples
+    const { data: existingReunioes, error: searchError } = await supabase
+      .from('reunioes')
+      .select('id')
+      .eq('cliente_id', venda.id)
+      .eq('sdr_id', venda.sdr_id)
+
+    if (searchError) {
+      console.warn('Erro ao verificar reunião existente, pulando criação:', searchError.message)
+      return
+    }
+
+    if (!existingReunioes || existingReunioes.length === 0) {
+      // Criar reunião que gerou venda
+      const { error } = await supabase
+        .from('reunioes')
+        .insert([{
+          cliente_id: venda.id,
+          sdr_id: venda.sdr_id,
+          tipo: 'gerou_venda',
+          data_reuniao: venda.data_fechamento || venda.atualizado_em || new Date().toISOString().split('T')[0]
+        }])
+
+      if (!error) {
+        reunioesCriadas.add(cacheKey)
+        console.log('Reunião criada automaticamente para venda:', venda.id)
+      } else {
+        console.warn('Erro ao criar reunião:', error.message)
+      }
+    } else {
+      reunioesCriadas.add(cacheKey) // Marcar como processada
+    }
+  } catch (error) {
+    console.error('Erro ao criar reunião automática:', error)
+  }
+}
+
+// Função para deletar cliente
+export async function deleteCliente(id: number) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return { success: false, error: 'Supabase não configurado' }
+  }
+
+  try {
+    const { error } = await supabase
+      .from('clientes')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error deleting cliente:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting cliente:', error)
+    return { success: false, error: 'Erro ao deletar cliente' }
+  }
+}
+
+export async function getMetaAdsRealStats(startDate?: string, endDate?: string) {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured.')
+    return {
+      reunioesMarcadas: 0,
+      reunioesRealizadas: 0,
+      novosFechamentos: 0
+    }
+  }
+
+  try {
+    // Se não foram fornecidas datas, usar o mês atual
+    let fromDate: string
+    let toDate: string
+    
+    if (startDate && endDate) {
+      fromDate = startDate
+      toDate = endDate + 'T23:59:59'
+    } else {
+      const currentDate = new Date()
+      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+      fromDate = firstDayOfMonth.toISOString().split('T')[0]
+      toDate = currentDate.toISOString().split('T')[0] + 'T23:59:59'
+    }
+
+    // Buscar clientes criados no período
+    const { data: clientesDoPeriodo, error: clientesError } = await supabase
+      .from('clientes')
+      .select('*')
+      .gte('criado_em', fromDate)
+      .lte('criado_em', toDate)
+
+    if (clientesError) {
+      console.error('Error fetching clientes do período:', clientesError)
+    }
+
+    // Buscar reuniões marcadas no período
+    const { data: reunioesDoPeriodo, error: reunioesError } = await supabase
+      .from('reunioes')
+      .select('*')
+      .gte('data_reuniao', fromDate)
+      .lte('data_reuniao', toDate)
+
+    if (reunioesError) {
+      console.error('Error fetching reuniões do período:', reunioesError)
+    }
+
+    // Reuniões marcadas = clientes com etapa "Agendados"
+    const reunioesMarcadas = clientesDoPeriodo?.filter(cliente => 
+      cliente.etapa === 'Agendados'
+    ).length || 0
+    
+    // Reuniões realizadas = clientes com etapa "Reunioes Feitas" ou "Vendas Realizadas"
+    const reunioesRealizadas = clientesDoPeriodo?.filter(cliente => 
+      cliente.etapa === 'Reunioes Feitas' || cliente.etapa === 'Vendas Realizadas'
+    ).length || 0
+    
+    // Novos fechamentos = clientes com vendas realizadas no período
+    const novosFechamentos = clientesDoPeriodo?.filter(cliente => 
+      cliente.etapa === 'Vendas Realizadas' && cliente.valor_venda && cliente.valor_venda > 0
+    ).length || 0
+
+    return {
+      reunioesMarcadas,
+      reunioesRealizadas,
+      novosFechamentos
+    }
+  } catch (error) {
+    console.error('Error fetching Meta Ads real stats:', error)
+    return {
+      reunioesMarcadas: 0,
+      reunioesRealizadas: 0,
+      novosFechamentos: 0
+    }
   }
 }

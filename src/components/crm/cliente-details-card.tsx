@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Eye, Edit, Save, X, Loader2, User, Mail, Phone, Building, MapPin, DollarSign } from "lucide-react"
-import { updateCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache } from "@/lib/supabase"
+import { updateCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
 import { Cliente, EtapaEnum, Colaborador } from "@/types/database"
 
 interface ClienteForm {
@@ -28,6 +28,21 @@ interface ClienteForm {
   etapa: EtapaEnum
   endereco: string
   valor_venda?: number | string
+  tipo_plano: string
+  valor_base_plano?: number | string
+  usar_valor_base_para_venda: boolean
+}
+
+interface Plano {
+  id: number
+  nome: string
+  periodo: string
+  valor: number
+  desconto: number
+  trial: boolean
+  obs: string
+  nivel: number
+  qtde_dias_trial: number
 }
 
 const etapas: EtapaEnum[] = [
@@ -39,15 +54,20 @@ const etapas: EtapaEnum[] = [
 ]
 
 const origens = [
-  'Google Ads',
   'Facebook Ads',
+  'Google Ads',
+  'Instagram',
   'LinkedIn',
-  'Indicação',
   'Site',
-  'Telefone',
-  'Email',
-  'Evento',
+  'Indicação',
   'Outros'
+]
+
+const tiposPlano = [
+  'mensal',
+  'trimestral',
+  'semestral',
+  'anual'
 ]
 
 const getEtapaColor = (etapa: EtapaEnum) => {
@@ -68,7 +88,7 @@ const getEtapaColor = (etapa: EtapaEnum) => {
 }
 
 interface ClienteDetailsCardProps {
-  cliente: Cliente | null
+  cliente: Cliente
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onClienteUpdated?: () => void
@@ -78,6 +98,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
+  const [planos, setPlanos] = useState<Plano[]>([])
   const [form, setForm] = useState<ClienteForm>({
     nome: '',
     email: '',
@@ -88,7 +109,10 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     closer_id: '',
     etapa: 'Lead',
     endereco: '',
-    valor_venda: ''
+    valor_venda: '',
+    tipo_plano: '',
+    valor_base_plano: '',
+    usar_valor_base_para_venda: true
   })
 
   // Update form when cliente changes
@@ -104,25 +128,100 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         closer_id: cliente.closer_id ? cliente.closer_id.toString() : '',
         etapa: cliente.etapa,
         endereco: cliente.endereco || '',
-        valor_venda: cliente.valor_venda || ''
+        valor_venda: cliente.valor_venda || '',
+        tipo_plano: cliente.tipo_plano || '',
+        valor_base_plano: cliente.valor_base_plano || '',
+        usar_valor_base_para_venda: cliente.valor_venda === cliente.valor_base_plano
       })
     }
   }, [cliente])
 
-  // Load colaboradores when component mounts
+  // Load colaboradores and planos when component mounts
   useEffect(() => {
-    const loadColaboradores = async () => {
-      const data = await getColaboradores()
-      setColaboradores(data)
+    const loadData = async () => {
+      const [colaboradoresData, planosData] = await Promise.all([
+        getColaboradores(),
+        getPlanos()
+      ])
+      setColaboradores(colaboradoresData)
+      setPlanos(planosData)
     }
-    loadColaboradores()
+    loadData()
   }, [])
 
-  const handleInputChange = (field: keyof ClienteForm, value: string | number) => {
-    setForm(prev => ({
-      ...prev,
-      [field]: value
-    }))
+  const handleInputChange = (field: keyof ClienteForm, value: string | number | boolean) => {
+    setForm(prev => {
+      const newForm = {
+        ...prev,
+        [field]: value
+      }
+
+      // Se mudou a etapa e não é "Vendas Realizadas", limpar campos de venda
+      if (field === 'etapa' && value !== 'Vendas Realizadas') {
+        newForm.valor_venda = ''
+        newForm.tipo_plano = ''
+        newForm.valor_base_plano = ''
+        newForm.usar_valor_base_para_venda = true
+      }
+
+      // Se selecionou um tipo de plano, preencher valor base automaticamente
+      if (field === 'tipo_plano' && value) {
+        const planoSelecionado = planos.find(p => p.periodo.toLowerCase() === value)
+        if (planoSelecionado) {
+          const valorBase = planoSelecionado.valor - planoSelecionado.desconto
+          newForm.valor_base_plano = valorBase
+          // Se checkbox está marcado, preencher valor da venda também
+          if (newForm.usar_valor_base_para_venda) {
+            newForm.valor_venda = valorBase
+          }
+        }
+      }
+
+      // Se mudou o checkbox "usar valor base para venda"
+      if (field === 'usar_valor_base_para_venda') {
+        if (value && newForm.valor_base_plano) {
+          // Se marcou o checkbox, preencher valor da venda com valor base
+          newForm.valor_venda = newForm.valor_base_plano
+        }
+      }
+
+      // Se mudou o valor base e checkbox está marcado, atualizar valor da venda
+      if (field === 'valor_base_plano' && newForm.usar_valor_base_para_venda && typeof value === 'number') {
+        newForm.valor_venda = value
+      }
+
+      return newForm
+    })
+  }
+
+  // Validação antes de salvar
+  const validateForm = () => {
+    if (!form.nome.trim()) {
+      alert('Nome é obrigatório')
+      return false
+    }
+
+    // Se etapa é "Vendas Realizadas", validar campos obrigatórios
+    if (form.etapa === 'Vendas Realizadas') {
+      if (!form.valor_venda || parseFloat(form.valor_venda.toString()) <= 0) {
+        alert('Valor da venda é obrigatório para vendas realizadas')
+        return false
+      }
+      if (!form.tipo_plano) {
+        alert('Tipo do plano é obrigatório para vendas realizadas')
+        return false
+      }
+      if (!form.valor_base_plano || parseFloat(form.valor_base_plano.toString()) <= 0) {
+        alert('Valor base do plano é obrigatório para vendas realizadas')
+        return false
+      }
+      if (!form.closer_id) {
+        alert('Closer é obrigatório para vendas realizadas')
+        return false
+      }
+    }
+
+    return true
   }
 
   // Format phone number as user types
@@ -147,43 +246,62 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     }).format(value)
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+  const handleSave = async () => {
+    if (!validateForm()) {
+      return
+    }
 
-  const getSdrName = (id: number | null | undefined) => {
-    if (!id) return 'N/A'
-    const colaborador = colaboradores.find(col => col.id === id)
-    return colaborador ? colaborador.nome : 'N/A'
-  }
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured. Cannot save changes.')
+      alert('Configuração do banco de dados não encontrada. Não é possível salvar as alterações.')
+      return
+    }
 
-  const getCloserName = (id: number | null | undefined) => {
-    if (!id) return 'N/A'
-    const colaborador = colaboradores.find(col => col.id === id)
-    return colaborador ? colaborador.nome : 'N/A'
-  }
+    setLoading(true)
+    try {
+      await refreshSchemaCache()
+      
+      const updateData: any = {
+        nome: form.nome,
+        email: form.email || null,
+        telefone: form.telefone || null,
+        empresa: form.empresa || null,
+        origem: form.origem || null,
+        sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
+        closer_id: form.closer_id ? parseInt(form.closer_id) : null,
+        etapa: form.etapa,
+        endereco: form.endereco || null,
+        valor_venda: form.valor_venda ? parseFloat(form.valor_venda.toString()) : null,
+        tipo_plano: form.tipo_plano || null,
+        valor_base_plano: form.valor_base_plano ? parseFloat(form.valor_base_plano.toString()) : null
+      }
 
-  // Filter colaboradores by function
-  const sdrColaboradores = colaboradores.filter(col => 
-    col.funcao.toLowerCase().includes('sdr') || 
-    col.funcao.toLowerCase() === 'sdr'
-  )
-  
-  const closerColaboradores = colaboradores.filter(col => 
-    col.funcao.toLowerCase().includes('closer') || 
-    col.funcao.toLowerCase() === 'closer'
-  )
+      // Se etapa é "Vendas Realizadas" e tem valor, preencher data de fechamento
+      if (form.etapa === 'Vendas Realizadas' && form.valor_venda) {
+        updateData.data_fechamento = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+      }
+
+      const updatedCliente = await updateCliente(cliente.id, updateData)
+      
+      if (updatedCliente) {
+        console.log('Cliente updated successfully:', updatedCliente)
+        setIsEditing(false)
+        onClienteUpdated?.()
+        alert('Cliente atualizado com sucesso!')
+      } else {
+        throw new Error('Failed to update cliente')
+      }
+    } catch (error) {
+      console.error('Error updating cliente:', error)
+      alert('Erro ao atualizar cliente. Tente novamente.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCancel = () => {
-    setIsEditing(false)
+    // Reset form to original values
     if (cliente) {
-      // Reset form to original values
       setForm({
         nome: cliente.nome || '',
         email: cliente.email || '',
@@ -194,317 +312,247 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         closer_id: cliente.closer_id ? cliente.closer_id.toString() : '',
         etapa: cliente.etapa,
         endereco: cliente.endereco || '',
-        valor_venda: cliente.valor_venda || ''
+        valor_venda: cliente.valor_venda || '',
+        tipo_plano: cliente.tipo_plano || '',
+        valor_base_plano: cliente.valor_base_plano || '',
+        usar_valor_base_para_venda: cliente.valor_venda === cliente.valor_base_plano
       })
     }
-  }
-
-  const handleClose = () => {
     setIsEditing(false)
-    onOpenChange(false)
   }
 
-  const handleSave = async () => {
-    if (!cliente) return
+  if (!isOpen) return null
 
-    // Basic validation
-    if (!form.nome.trim()) {
-      alert('Nome é obrigatório')
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      if (!isSupabaseConfigured()) {
-        // Mock success for demo purposes
-        console.log('Cliente atualizado (modo demo):', form)
-        alert('Cliente atualizado com sucesso! (Modo demo - configure o Supabase para salvar no banco)')
-        setIsEditing(false)
-        onClienteUpdated?.()
-        return
-      }
-
-      const updateData = {
-        nome: form.nome.trim(),
-        email: form.email.trim() || null,
-        telefone: form.telefone.trim() || null,
-        empresa: form.empresa.trim() || null,
-        origem: form.origem || null,
-        sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
-        closer_id: form.closer_id ? parseInt(form.closer_id) : null,
-        etapa: form.etapa,
-        endereco: form.endereco.trim() || null,
-        valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
-      }
-
-      const result = await updateCliente(cliente.id, updateData)
-
-      if (!result.success) {
-        // If it's a schema cache error, try refreshing and retrying
-        if (result.error?.includes('PGRST204') || result.error?.includes('schema cache')) {
-          console.log('Schema cache error detected. Attempting to refresh...')
-          const refreshed = await refreshSchemaCache()
-          
-          if (refreshed) {
-            // Retry the update after refreshing cache
-            const retryResult = await updateCliente(cliente.id, updateData)
-            if (!retryResult.success) {
-              alert(`Erro ao atualizar cliente: ${retryResult.error}`)
-              return
-            }
-            console.log('Cliente atualizado com sucesso após refresh do cache:', retryResult.data)
-            alert('Cliente atualizado com sucesso!')
-            setIsEditing(false)
-            onClienteUpdated?.()
-            return
-          }
-        }
-        
-        alert(`Erro ao atualizar cliente: ${result.error}`)
-        return
-      }
-
-      // Check if there was a warning (partial success)
-      if ('warning' in result && result.warning) {
-        console.warn('Warning during update:', result.warning)
-        alert(`Cliente atualizado com aviso: ${result.warning}`)
-      } else {
-        alert('Cliente atualizado com sucesso!')
-      }
-
-      console.log('Cliente atualizado com sucesso:', result.data)
-      setIsEditing(false)
-      onClienteUpdated?.()
-
-    } catch (error) {
-      console.error('Erro ao atualizar cliente:', error)
-      alert('Erro ao atualizar cliente. Verifique a conexão com o banco.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (!cliente) return null
+  // Filter colaboradores by role
+  const sdrColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'sdr')
+  const closerColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
 
   return (
-    <>
-      {/* Modal Overlay */}
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[1001] flex items-center justify-center p-4"
-             onClick={(e) => {
-               if (e.target === e.currentTarget) {
-                 handleClose()
-               }
-             }}
-        >
-          <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative z-[1002]"
-                onClick={(e) => e.stopPropagation()}>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  {isEditing ? (
-                    <>
-                      <Edit className="h-5 w-5 text-blue-600" />
-                      Editar Cliente
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-5 w-5 text-green-600" />
-                      Detalhes do Cliente
-                    </>
-                  )}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  {!isEditing && (
-                    <Button
-                      onClick={() => setIsEditing(true)}
-                      disabled={loading}
-                      size="sm"
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Editar
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleClose}
-                    disabled={loading}
-                    className="h-8 w-8"
-                    aria-label="Close"
-                  >
-                    <X className="h-4 w-4" />
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Eye className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle>Editar Cliente</CardTitle>
+              <CardDescription>Edite as informações do cliente</CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge className={getEtapaColor(cliente.etapa)}>
+              {cliente.etapa}
+            </Badge>
+            <span className="text-sm text-muted-foreground">ID: #{cliente.id}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              <div>Criado: {new Date(cliente.criado_em).toLocaleString('pt-BR')}</div>
+              <div>Atualizado: {new Date(cliente.atualizado_em).toLocaleString('pt-BR')}</div>
+            </div>
+            <div className="flex gap-2">
+              {!isEditing ? (
+                <Button onClick={() => setIsEditing(true)} disabled={loading}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              ) : (
+                <>
+                  <Button onClick={handleCancel} variant="outline" disabled={loading}>
+                    <X className="h-4 w-4 mr-2" />
+                    Cancelar
                   </Button>
-                </div>
+                  <Button onClick={handleSave} disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    Salvar Alterações
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {isEditing ? (
+            /* Edit Mode */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="nome" className="text-sm font-medium">Nome *</Label>
+                <Input
+                  id="nome"
+                  value={form.nome}
+                  onChange={(e) => handleInputChange('nome', e.target.value)}
+                  placeholder="Nome completo"
+                  disabled={loading}
+                />
               </div>
-              <CardDescription>
-                {isEditing ? 'Edite as informações do cliente' : 'Visualize as informações detalhadas do cliente'}
-                {!isSupabaseConfigured() && (
-                  <span className="block text-xs text-amber-600 mt-1">
-                    ⚠️ Modo demo - configure o Supabase para salvar no banco
-                  </span>
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Status and Meta Info */}
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-4">
-                  <Badge className={getEtapaColor(cliente.etapa)}>
-                    {cliente.etapa}
-                  </Badge>
-                  <div className="text-sm text-muted-foreground">
-                    ID: #{cliente.id}
-                  </div>
-                </div>
-                <div className="text-right text-sm text-muted-foreground">
-                  <div>Criado: {formatDate(cliente.criado_em)}</div>
-                  <div>Atualizado: {formatDate(cliente.atualizado_em)}</div>
-                </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  placeholder="email@exemplo.com"
+                  disabled={loading}
+                />
               </div>
 
-              {isEditing ? (
-                /* Edit Mode */
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <Label htmlFor="nome">Nome *</Label>
-                    <Input
-                      id="nome"
-                      value={form.nome}
-                      onChange={(e) => handleInputChange('nome', e.target.value)}
-                      placeholder="Nome completo"
-                      disabled={loading}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="telefone" className="text-sm font-medium">Telefone</Label>
+                <Input
+                  id="telefone"
+                  value={form.telefone}
+                  onChange={(e) => {
+                    const formatted = formatPhone(e.target.value)
+                    handleInputChange('telefone', formatted)
+                  }}
+                  placeholder="(11) 99999-9999"
+                  disabled={loading}
+                  maxLength={15}
+                />
+              </div>
 
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      placeholder="email@exemplo.com"
-                      disabled={loading}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="empresa" className="text-sm font-medium">Empresa</Label>
+                <Input
+                  id="empresa"
+                  value={form.empresa}
+                  onChange={(e) => handleInputChange('empresa', e.target.value)}
+                  placeholder="Nome da empresa"
+                  disabled={loading}
+                />
+              </div>
 
-                  <div>
-                    <Label htmlFor="telefone">Telefone</Label>
-                    <Input
-                      id="telefone"
-                      value={form.telefone}
-                      onChange={(e) => {
-                        const formatted = formatPhone(e.target.value)
-                        handleInputChange('telefone', formatted)
-                      }}
-                      placeholder="(11) 99999-9999"
-                      disabled={loading}
-                      maxLength={15}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="origem" className="text-sm font-medium">Origem</Label>
+                <Select
+                  value={form.origem}
+                  onValueChange={(value) => handleInputChange('origem', value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a origem" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[1003]">
+                    {origens.map((origem) => (
+                      <SelectItem key={origem} value={origem}>
+                        {origem}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <div>
-                    <Label htmlFor="empresa">Empresa</Label>
-                    <Input
-                      id="empresa"
-                      value={form.empresa}
-                      onChange={(e) => handleInputChange('empresa', e.target.value)}
-                      placeholder="Nome da empresa"
-                      disabled={loading}
-                    />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="sdr" className="text-sm font-medium">SDR</Label>
+                <Select
+                  value={form.sdr_id || "none"}
+                  onValueChange={(value) => handleInputChange('sdr_id', value === "none" ? "" : value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um SDR" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[1003]">
+                    <SelectItem value="none">Nenhum SDR</SelectItem>
+                    {sdrColaboradores.map((colaborador) => (
+                      <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                        {colaborador.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <div>
-                    <Label htmlFor="origem">Origem</Label>
+              <div className="space-y-2">
+                <Label htmlFor="closer" className="text-sm font-medium">Closer</Label>
+                <Select
+                  value={form.closer_id || "none"}
+                  onValueChange={(value) => handleInputChange('closer_id', value === "none" ? "" : value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um Closer" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[1003]">
+                    <SelectItem value="none">Nenhum Closer</SelectItem>
+                    {closerColaboradores.map((colaborador) => (
+                      <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                        {colaborador.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="etapa" className="text-sm font-medium">Etapa</Label>
+                <Select
+                  value={form.etapa}
+                  onValueChange={(value) => handleInputChange('etapa', value as EtapaEnum)}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[1003]">
+                    {etapas.map((etapa) => (
+                      <SelectItem key={etapa} value={etapa}>
+                        {etapa}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Campos de venda - só aparecem se etapa for "Vendas Realizadas" */}
+              {form.etapa === 'Vendas Realizadas' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="tipo_plano" className="text-sm font-medium">Tipo do Plano *</Label>
                     <Select
-                      value={form.origem}
-                      onValueChange={(value) => handleInputChange('origem', value)}
+                      value={form.tipo_plano}
+                      onValueChange={(value) => handleInputChange('tipo_plano', value)}
                       disabled={loading}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione a origem" />
+                        <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
                       <SelectContent className="z-[1003]">
-                        {origens.map((origem) => (
-                          <SelectItem key={origem} value={origem}>
-                            {origem}
+                        {planos.map((plano) => (
+                          <SelectItem key={plano.id} value={plano.periodo.toLowerCase()}>
+                            {plano.periodo} - R$ {(plano.valor - plano.desconto).toFixed(2)} {plano.obs}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                <div>
-                  <Label htmlFor="sdr">SDR</Label>
-                  <Select
-                    value={form.sdr_id || "none"}
-                    onValueChange={(value) => handleInputChange('sdr_id', value === "none" ? "" : value)}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um SDR" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[1003]">
-                      <SelectItem value="none">Nenhum SDR</SelectItem>
-                      {sdrColaboradores.map((colaborador) => (
-                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
-                          {colaborador.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="closer">Closer</Label>
-                  <Select
-                    value={form.closer_id || "none"}
-                    onValueChange={(value) => handleInputChange('closer_id', value === "none" ? "" : value)}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um Closer" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[1003]">
-                      <SelectItem value="none">Nenhum Closer</SelectItem>
-                      {closerColaboradores.map((colaborador) => (
-                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
-                          {colaborador.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>                  <div>
-                    <Label htmlFor="etapa">Etapa</Label>
-                    <Select
-                      value={form.etapa}
-                      onValueChange={(value) => handleInputChange('etapa', value as EtapaEnum)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="z-[1003]">
-                        {etapas.map((etapa) => (
-                          <SelectItem key={etapa} value={etapa}>
-                            {etapa}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="valor_venda">Valor da Venda (R$)</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="valor_base_plano" className="text-sm font-medium">Valor Base do Plano (R$) *</Label>
                     <Input
-                      id="valor_venda"
+                      id="valor_base_plano"
                       type="number"
-                      value={form.valor_venda || ''}
+                      value={form.valor_base_plano || ''}
                       onChange={(e) => {
                         const value = e.target.value
-                        handleInputChange('valor_venda', value ? parseFloat(value) : '')
+                        handleInputChange('valor_base_plano', value ? parseFloat(value) : '')
                       }}
                       placeholder="0,00"
                       min="0"
@@ -513,143 +561,141 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
                     />
                   </div>
 
-                  <div className="md:col-span-2">
-                    <Label htmlFor="endereco">Endereço</Label>
-                    <Input
-                      id="endereco"
-                      value={form.endereco}
-                      onChange={(e) => handleInputChange('endereco', e.target.value)}
-                      placeholder="Endereço completo"
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              ) : (
-                /* View Mode */
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <User className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{cliente.nome}</div>
-                        <div className="text-sm text-muted-foreground">Nome completo</div>
-                      </div>
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="usar_valor_base"
+                        checked={form.usar_valor_base_para_venda}
+                        onChange={(e) => handleInputChange('usar_valor_base_para_venda', e.target.checked)}
+                        disabled={loading}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      />
+                      <Label htmlFor="usar_valor_base" className="text-sm font-medium cursor-pointer">
+                        Usar valor base para venda
+                      </Label>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{cliente.email || 'N/A'}</div>
-                        <div className="text-sm text-muted-foreground">Email</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Phone className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{cliente.telefone || 'N/A'}</div>
-                        <div className="text-sm text-muted-foreground">Telefone</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Building className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">{cliente.empresa || 'N/A'}</div>
-                        <div className="text-sm text-muted-foreground">Empresa</div>
-                      </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="valor_venda" className="text-sm font-medium">Valor da Venda (R$) *</Label>
+                      <Input
+                        id="valor_venda"
+                        type="number"
+                        value={form.valor_venda || ''}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          handleInputChange('valor_venda', value ? parseFloat(value) : '')
+                          // Se mudou manualmente o valor, desmarcar o checkbox
+                          if (value && parseFloat(value) !== parseFloat(form.valor_base_plano?.toString() || '0')) {
+                            handleInputChange('usar_valor_base_para_venda', false)
+                          }
+                        }}
+                        placeholder="0,00"
+                        min="0"
+                        step="0.01"
+                        disabled={loading || form.usar_valor_base_para_venda}
+                      />
+                      {form.usar_valor_base_para_venda && (
+                        <p className="text-xs text-muted-foreground">
+                          Valor preenchido automaticamente com o valor base do plano
+                        </p>
+                      )}
                     </div>
                   </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded bg-blue-100 flex items-center justify-center">
-                        <span className="text-xs font-medium text-blue-600">O</span>
-                      </div>
-                      <div>
-                        <div className="font-medium">{cliente.origem || 'N/A'}</div>
-                        <div className="text-sm text-muted-foreground">Origem</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded bg-green-100 flex items-center justify-center">
-                        <span className="text-xs font-medium text-green-600">S</span>
-                      </div>
-                      <div>
-                        <div className="font-medium">{getSdrName(cliente.sdr_id)}</div>
-                        <div className="text-sm text-muted-foreground">SDR</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="h-5 w-5 rounded bg-purple-100 flex items-center justify-center">
-                        <span className="text-xs font-medium text-purple-600">C</span>
-                      </div>
-                      <div>
-                        <div className="font-medium">{getCloserName(cliente.closer_id)}</div>
-                        <div className="text-sm text-muted-foreground">Closer</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <DollarSign className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <div className="font-medium">
-                          {cliente.valor_venda ? formatCurrency(cliente.valor_venda) : 'N/A'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Valor da venda</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <div className="flex items-start gap-3">
-                      <MapPin className="h-5 w-5 text-muted-foreground mt-1" />
-                      <div>
-                        <div className="font-medium">{cliente.endereco || 'N/A'}</div>
-                        <div className="text-sm text-muted-foreground">Endereço</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                </>
               )}
 
-              {/* Action Buttons - only show in edit mode */}
-              {isEditing && (
-                <div className="flex gap-3 pt-6 border-t">
-                  <Button
-                    onClick={handleSave}
-                    disabled={loading || !form.nome.trim()}
-                    className="flex-1"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Salvar Alterações
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={loading}
-                    className="flex-1"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Cancelar
-                  </Button>
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="endereco" className="text-sm font-medium">Endereço</Label>
+                <Input
+                  id="endereco"
+                  value={form.endereco}
+                  onChange={(e) => handleInputChange('endereco', e.target.value)}
+                  placeholder="Endereço completo"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          ) : (
+            /* View Mode */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium">{cliente.nome}</div>
+                    <div className="text-sm text-muted-foreground">Nome completo</div>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-    </>
+
+                <div className="flex items-center gap-3">
+                  <Mail className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium">{cliente.email || 'N/A'}</div>
+                    <div className="text-sm text-muted-foreground">Email</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium">{cliente.telefone || 'N/A'}</div>
+                    <div className="text-sm text-muted-foreground">Telefone</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Building className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium">{cliente.empresa || 'N/A'}</div>
+                    <div className="text-sm text-muted-foreground">Empresa</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="font-medium">{cliente.endereco || 'N/A'}</div>
+                    <div className="text-sm text-muted-foreground">Endereço</div>
+                  </div>
+                </div>
+
+                {cliente.valor_venda && (
+                  <div className="flex items-center gap-3">
+                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium">{formatCurrency(cliente.valor_venda)}</div>
+                      <div className="text-sm text-muted-foreground">Valor da venda</div>
+                    </div>
+                  </div>
+                )}
+
+                {cliente.tipo_plano && (
+                  <div className="flex items-center gap-3">
+                    <div className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium">{cliente.tipo_plano}</div>
+                      <div className="text-sm text-muted-foreground">Tipo do plano</div>
+                    </div>
+                  </div>
+                )}
+
+                {cliente.data_fechamento && (
+                  <div className="flex items-center gap-3">
+                    <div className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium">{new Date(cliente.data_fechamento).toLocaleDateString('pt-BR')}</div>
+                      <div className="text-sm text-muted-foreground">Data de fechamento</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

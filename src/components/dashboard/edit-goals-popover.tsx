@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/popover"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Target, DollarSign, Users, Save, Edit, Loader2 } from "lucide-react"
-import { getCurrentMonthMeta, getCurrentMonthMetaSdr, upsertMeta, upsertMetaSdr, isSupabaseConfigured } from "@/lib/supabase"
+import { getCurrentMonthMeta, getCurrentMonthMetaSdr, upsertMeta, upsertMetaSdr, isSupabaseConfigured, getWorkingDaysInMonth } from "@/lib/supabase"
 
 interface GoalData {
   id: string
@@ -287,7 +287,12 @@ export function EditGoalsPopover() {
                   <div>
                     <span className="text-muted-foreground">Meta Diária: </span>
                     <span className="font-semibold">
-                      {formatCurrency(goals.find(g => g.id === "diaria")?.value || 0)}
+                      {(() => {
+                        const metaComercial = goals.find(g => g.id === "comercial")?.value || 0
+                        const currentDate = new Date()
+                        const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
+                        return formatCurrency(metaComercial / workingDays)
+                      })()}
                     </span>
                   </div>
                 </div>

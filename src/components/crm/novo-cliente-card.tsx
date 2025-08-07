@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Save, X, Loader2 } from "lucide-react"
-import { createCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache } from "@/lib/supabase"
+import { createCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
 import type { EtapaEnum, Colaborador } from "@/types/database"
 
 interface NovoClienteForm {
@@ -27,6 +27,21 @@ interface NovoClienteForm {
   etapa: EtapaEnum
   endereco: string
   valor_venda?: number | string
+  tipo_plano: string
+  valor_base_plano?: number | string
+  usar_valor_base_para_venda: boolean
+}
+
+interface Plano {
+  id: number
+  nome: string
+  periodo: string
+  valor: number
+  desconto: number
+  trial: boolean
+  obs: string
+  nivel: number
+  qtde_dias_trial: number
 }
 
 const etapas: EtapaEnum[] = [
@@ -38,14 +53,12 @@ const etapas: EtapaEnum[] = [
 ]
 
 const origens = [
-  'Google Ads',
   'Facebook Ads',
+  'Google Ads',
+  'Instagram',
   'LinkedIn',
-  'Indicação',
   'Site',
-  'Telefone',
-  'Email',
-  'Evento',
+  'Indicação',
   'Outros'
 ]
 
@@ -58,6 +71,7 @@ interface NovoClienteCardProps {
 export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: NovoClienteCardProps) {
   const [loading, setLoading] = useState(false)
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
+  const [planos, setPlanos] = useState<Plano[]>([])
   const [form, setForm] = useState<NovoClienteForm>({
     nome: '',
     email: '',
@@ -68,34 +82,98 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
     closer_id: '',
     etapa: 'Lead',
     endereco: '',
-    valor_venda: ''
+    valor_venda: '',
+    tipo_plano: '',
+    valor_base_plano: '',
+    usar_valor_base_para_venda: true
   })
 
-  // Load colaboradores when component mounts
+  // Load colaboradores and planos when component mounts
   useEffect(() => {
-    const loadColaboradores = async () => {
-      const data = await getColaboradores()
-      setColaboradores(data)
+    const loadData = async () => {
+      const [colaboradoresData, planosData] = await Promise.all([
+        getColaboradores(),
+        getPlanos()
+      ])
+      setColaboradores(colaboradoresData)
+      setPlanos(planosData)
     }
-    loadColaboradores()
+    loadData()
   }, [])
 
-  // Debug log when component mounts
-  useEffect(() => {
-    console.log('NovoClienteCard component mounted')
-    console.log('Button should be visible at bottom-right corner')
-  }, [])
+  const handleInputChange = (field: keyof NovoClienteForm, value: string | number | boolean) => {
+    setForm(prev => {
+      const newForm = {
+        ...prev,
+        [field]: value
+      }
 
-  // Debug log when isOpen changes
-  useEffect(() => {
-    console.log('Modal open state changed:', isOpen)
-  }, [isOpen])
+      // Se mudou a etapa e não é "Vendas Realizadas", limpar campos de venda
+      if (field === 'etapa' && value !== 'Vendas Realizadas') {
+        newForm.valor_venda = ''
+        newForm.tipo_plano = ''
+        newForm.valor_base_plano = ''
+        newForm.usar_valor_base_para_venda = true
+      }
 
-  const handleInputChange = (field: keyof NovoClienteForm, value: string | number) => {
-    setForm(prev => ({
-      ...prev,
-      [field]: value
-    }))
+      // Se selecionou um tipo de plano, preencher valor base automaticamente
+      if (field === 'tipo_plano' && value) {
+        const planoSelecionado = planos.find(p => p.periodo.toLowerCase() === value)
+        if (planoSelecionado) {
+          const valorBase = planoSelecionado.valor - planoSelecionado.desconto
+          newForm.valor_base_plano = valorBase
+          // Se checkbox está marcado, preencher valor da venda também
+          if (newForm.usar_valor_base_para_venda) {
+            newForm.valor_venda = valorBase
+          }
+        }
+      }
+
+      // Se mudou o checkbox "usar valor base para venda"
+      if (field === 'usar_valor_base_para_venda') {
+        if (value && newForm.valor_base_plano) {
+          // Se marcou o checkbox, preencher valor da venda com valor base
+          newForm.valor_venda = newForm.valor_base_plano
+        }
+      }
+
+      // Se mudou o valor base e checkbox está marcado, atualizar valor da venda
+      if (field === 'valor_base_plano' && newForm.usar_valor_base_para_venda) {
+        newForm.valor_venda = typeof value === 'number' || typeof value === 'string' ? value : undefined
+      }
+
+      return newForm
+    })
+  }
+
+  // Validação antes de salvar
+  const validateForm = () => {
+    if (!form.nome.trim()) {
+      alert('Nome é obrigatório')
+      return false
+    }
+
+    // Se etapa é "Vendas Realizadas", validar campos obrigatórios
+    if (form.etapa === 'Vendas Realizadas') {
+      if (!form.valor_venda || parseFloat(form.valor_venda.toString()) <= 0) {
+        alert('Valor da venda é obrigatório para vendas realizadas')
+        return false
+      }
+      if (!form.tipo_plano) {
+        alert('Tipo do plano é obrigatório para vendas realizadas')
+        return false
+      }
+      if (!form.valor_base_plano || parseFloat(form.valor_base_plano.toString()) <= 0) {
+        alert('Valor base do plano é obrigatório para vendas realizadas')
+        return false
+      }
+      if (!form.closer_id) {
+        alert('Closer é obrigatório para vendas realizadas')
+        return false
+      }
+    }
+
+    return true
   }
 
   // Format phone number as user types
@@ -124,47 +202,29 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
       closer_id: '',
       etapa: 'Lead',
       endereco: '',
-      valor_venda: ''
+      valor_venda: '',
+      tipo_plano: '',
+      valor_base_plano: '',
+      usar_valor_base_para_venda: true
     })
   }
 
-  // Filter colaboradores by function
-  const sdrColaboradores = colaboradores.filter(col => 
-    col.funcao.toLowerCase().includes('sdr') || 
-    col.funcao.toLowerCase() === 'sdr'
-  )
-  
-  const closerColaboradores = colaboradores.filter(col => 
-    col.funcao.toLowerCase().includes('closer') || 
-    col.funcao.toLowerCase() === 'closer'
-  )
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return
+    }
 
-  const handleCancel = () => {
-    resetForm()
-    onOpenChange(false)
-  }
-
-  const handleSave = async () => {
-    // Basic validation - only name is required
-    if (!form.nome.trim()) {
-      alert('Nome é obrigatório')
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured. Cannot save changes.')
+      alert('Configuração do banco de dados não encontrada. Não é possível salvar as alterações.')
       return
     }
 
     setLoading(true)
-
     try {
-      if (!isSupabaseConfigured()) {
-        // Mock success for demo purposes
-        console.log('Cliente criado (modo demo):', form)
-        alert('Cliente criado com sucesso! (Modo demo - configure o Supabase para salvar no banco)')
-        resetForm()
-        onOpenChange(false)
-        onClienteAdicionado?.()
-        return
-      }
-
-      const result = await createCliente({
+      await refreshSchemaCache()
+      
+      const clienteData: any = {
         nome: form.nome.trim(),
         email: form.email.trim() || null,
         telefone: form.telefone.trim() || null,
@@ -174,254 +234,234 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         closer_id: form.closer_id ? parseInt(form.closer_id) : null,
         etapa: form.etapa,
         endereco: form.endereco.trim() || null,
-        valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
-      })
-
-      if (!result.success) {
-        // If it's a schema cache error, try refreshing and retrying
-        if (result.error?.includes('PGRST204') || result.error?.includes('schema cache')) {
-          console.log('Schema cache error detected. Attempting to refresh...')
-          const refreshed = await refreshSchemaCache()
-          
-          if (refreshed) {
-            // Retry the creation after refreshing cache
-            const retryResult = await createCliente({
-              nome: form.nome.trim(),
-              email: form.email.trim() || null,
-              telefone: form.telefone.trim() || null,
-              empresa: form.empresa.trim() || null,
-              origem: form.origem || null,
-              sdr_id: form.sdr_id ? parseInt(form.sdr_id) : null,
-              closer_id: form.closer_id ? parseInt(form.closer_id) : null,
-              etapa: form.etapa,
-              endereco: form.endereco.trim() || null,
-              valor_venda: typeof form.valor_venda === 'number' ? form.valor_venda : (form.valor_venda ? parseFloat(form.valor_venda.toString()) : null)
-            })
-            
-            if (!retryResult.success) {
-              alert(`Erro ao criar cliente: ${retryResult.error}`)
-              return
-            }
-            
-            console.log('Cliente criado com sucesso após refresh do cache:', retryResult.data)
-            alert('Cliente criado com sucesso!')
-            resetForm()
-            onOpenChange(false)
-            onClienteAdicionado?.()
-            window.dispatchEvent(new CustomEvent('clienteAdicionado'))
-            return
-          }
-        }
-        
-        alert(`Erro ao criar cliente: ${result.error}`)
-        return
+        valor_venda: form.valor_venda ? parseFloat(form.valor_venda.toString()) : null,
+        tipo_plano: form.tipo_plano || null,
+        valor_base_plano: form.valor_base_plano ? parseFloat(form.valor_base_plano.toString()) : null
       }
 
-      // Check if there was a warning (partial success)
-      if ('warning' in result && result.warning) {
-        console.warn('Warning during creation:', result.warning)
-        alert(`Cliente criado com aviso: ${result.warning}`)
-      } else {
+      // Se etapa é "Vendas Realizadas" e tem valor, preencher data de fechamento
+      if (form.etapa === 'Vendas Realizadas' && form.valor_venda) {
+        clienteData.data_fechamento = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+      }
+
+      const novoCliente = await createCliente(clienteData)
+      
+      if (novoCliente) {
+        console.log('Cliente criado com sucesso:', novoCliente)
+        resetForm()
+        onClienteAdicionado?.()
+        onOpenChange(false)
         alert('Cliente criado com sucesso!')
+      } else {
+        throw new Error('Failed to create cliente')
       }
-
-      console.log('Cliente criado com sucesso:', result.data)
-      resetForm()
-      onOpenChange(false)
-      onClienteAdicionado?.()
-
-      // Optionally trigger a refresh of the parent component data
-      window.dispatchEvent(new CustomEvent('clienteAdicionado'))
-
     } catch (error) {
-      console.error('Erro ao salvar cliente:', error)
-      alert('Erro ao salvar cliente. Verifique a conexão com o banco.')
+      console.error('Error creating cliente:', error)
+      alert('Erro ao criar cliente. Tente novamente.')
     } finally {
       setLoading(false)
     }
   }
 
+  const handleCancel = () => {
+    resetForm()
+    onOpenChange(false)
+  }
+
+  if (!isOpen) return null
+
+  // Filter colaboradores by role
+  const sdrColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'sdr')
+  const closerColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
+
   return (
-    <>
-      {/* Modal Overlay */}
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[1001] flex items-center justify-center p-4"
-             onClick={(e) => {
-               if (e.target === e.currentTarget) {
-                 handleCancel()
-               }
-             }}
-        >
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl relative z-[1002]"
-                onClick={(e) => e.stopPropagation()}>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5 text-blue-600" />
-                  Novo Cliente
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleCancel}
-                  disabled={loading}
-                  className="h-8 w-8"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <CardDescription>
-                Adicione um novo cliente ao sistema CRM
-                {!isSupabaseConfigured() && (
-                  <span className="block text-xs text-amber-600 mt-1">
-                    ⚠️ Modo demo - configure o Supabase para salvar no banco
-                  </span>
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <Label htmlFor="nome">Nome *</Label>
-                  <Input
-                    id="nome"
-                    value={form.nome}
-                    onChange={(e) => handleInputChange('nome', e.target.value)}
-                    placeholder="Nome completo"
-                    disabled={loading}
-                  />
-                </div>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Plus className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle>Novo Cliente</CardTitle>
+              <CardDescription>Adicione um novo cliente ao sistema</CardDescription>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCancel}
+            disabled={loading}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
 
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    placeholder="email@exemplo.com"
-                    disabled={loading}
-                  />
-                </div>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2 space-y-2">
+              <Label htmlFor="nome" className="text-sm font-medium">Nome *</Label>
+              <Input
+                id="nome"
+                value={form.nome}
+                onChange={(e) => handleInputChange('nome', e.target.value)}
+                placeholder="Nome completo"
+                disabled={loading}
+              />
+            </div>
 
-                <div>
-                  <Label htmlFor="telefone">Telefone</Label>
-                  <Input
-                    id="telefone"
-                    value={form.telefone}
-                    onChange={(e) => {
-                      const formatted = formatPhone(e.target.value)
-                      handleInputChange('telefone', formatted)
-                    }}
-                    placeholder="(11) 99999-9999"
-                    disabled={loading}
-                    maxLength={15}
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                placeholder="email@exemplo.com"
+                disabled={loading}
+              />
+            </div>
 
-                <div>
-                  <Label htmlFor="empresa">Empresa</Label>
-                  <Input
-                    id="empresa"
-                    value={form.empresa}
-                    onChange={(e) => handleInputChange('empresa', e.target.value)}
-                    placeholder="Nome da empresa"
-                    disabled={loading}
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="telefone" className="text-sm font-medium">Telefone</Label>
+              <Input
+                id="telefone"
+                value={form.telefone}
+                onChange={(e) => {
+                  const formatted = formatPhone(e.target.value)
+                  handleInputChange('telefone', formatted)
+                }}
+                placeholder="(11) 99999-9999"
+                disabled={loading}
+                maxLength={15}
+              />
+            </div>
 
-                <div>
-                  <Label htmlFor="origem">Origem</Label>
+            <div className="space-y-2">
+              <Label htmlFor="empresa" className="text-sm font-medium">Empresa</Label>
+              <Input
+                id="empresa"
+                value={form.empresa}
+                onChange={(e) => handleInputChange('empresa', e.target.value)}
+                placeholder="Nome da empresa"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="origem" className="text-sm font-medium">Origem</Label>
+              <Select
+                value={form.origem}
+                onValueChange={(value) => handleInputChange('origem', value)}
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a origem" />
+                </SelectTrigger>
+                <SelectContent className="z-[1003]">
+                  {origens.map((origem) => (
+                    <SelectItem key={origem} value={origem}>
+                      {origem}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sdr" className="text-sm font-medium">SDR</Label>
+              <Select
+                value={form.sdr_id || "none"}
+                onValueChange={(value) => handleInputChange('sdr_id', value === "none" ? "" : value)}
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um SDR" />
+                </SelectTrigger>
+                <SelectContent className="z-[1003]">
+                  <SelectItem value="none">Nenhum SDR</SelectItem>
+                  {sdrColaboradores.map((colaborador) => (
+                    <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                      {colaborador.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="closer" className="text-sm font-medium">Closer</Label>
+              <Select
+                value={form.closer_id || "none"}
+                onValueChange={(value) => handleInputChange('closer_id', value === "none" ? "" : value)}
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um Closer" />
+                </SelectTrigger>
+                <SelectContent className="z-[1003]">
+                  <SelectItem value="none">Nenhum Closer</SelectItem>
+                  {closerColaboradores.map((colaborador) => (
+                    <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
+                      {colaborador.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="etapa" className="text-sm font-medium">Etapa</Label>
+              <Select
+                value={form.etapa}
+                onValueChange={(value) => handleInputChange('etapa', value as EtapaEnum)}
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-[1003]">
+                  {etapas.map((etapa) => (
+                    <SelectItem key={etapa} value={etapa}>
+                      {etapa}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Campos de venda - só aparecem se etapa for "Vendas Realizadas" */}
+            {form.etapa === 'Vendas Realizadas' && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="tipo_plano" className="text-sm font-medium">Tipo do Plano *</Label>
                   <Select
-                    value={form.origem}
-                    onValueChange={(value) => handleInputChange('origem', value)}
+                    value={form.tipo_plano}
+                    onValueChange={(value) => handleInputChange('tipo_plano', value)}
                     disabled={loading}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a origem" />
+                      <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent className="z-[1003]">
-                      {origens.map((origem) => (
-                        <SelectItem key={origem} value={origem}>
-                          {origem}
+                      {planos.map((plano) => (
+                        <SelectItem key={plano.id} value={plano.periodo.toLowerCase()}>
+                          {plano.periodo} - R$ {(plano.valor - plano.desconto).toFixed(2)} {plano.obs}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <Label htmlFor="sdr">SDR</Label>
-                  <Select
-                    value={form.sdr_id || "none"}
-                    onValueChange={(value) => handleInputChange('sdr_id', value === "none" ? "" : value)}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um SDR" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[1003]">
-                      <SelectItem value="none">Nenhum SDR</SelectItem>
-                      {sdrColaboradores.map((colaborador) => (
-                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
-                          {colaborador.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="closer">Closer</Label>
-                  <Select
-                    value={form.closer_id || "none"}
-                    onValueChange={(value) => handleInputChange('closer_id', value === "none" ? "" : value)}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um Closer" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[1003]">
-                      <SelectItem value="none">Nenhum Closer</SelectItem>
-                      {closerColaboradores.map((colaborador) => (
-                        <SelectItem key={colaborador.id} value={colaborador.id.toString()}>
-                          {colaborador.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="etapa">Etapa</Label>
-                  <Select
-                    value={form.etapa}
-                    onValueChange={(value) => handleInputChange('etapa', value as EtapaEnum)}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="z-[1003]">
-                      {etapas.map((etapa) => (
-                        <SelectItem key={etapa} value={etapa}>
-                          {etapa}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="valor_venda">Valor da Venda (R$)</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="valor_base_plano" className="text-sm font-medium">Valor Base do Plano (R$) *</Label>
                   <Input
-                    id="valor_venda"
+                    id="valor_base_plano"
                     type="number"
-                    value={form.valor_venda || ''}
+                    value={form.valor_base_plano || ''}
                     onChange={(e) => {
                       const value = e.target.value
-                      handleInputChange('valor_venda', value ? parseFloat(value) : '')
+                      handleInputChange('valor_base_plano', value ? parseFloat(value) : '')
                     }}
                     placeholder="0,00"
                     min="0"
@@ -430,50 +470,92 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <Label htmlFor="endereco">Endereço</Label>
-                  <Input
-                    id="endereco"
-                    value={form.endereco}
-                    onChange={(e) => handleInputChange('endereco', e.target.value)}
-                    placeholder="Endereço completo"
-                    disabled={loading}
-                  />
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="usar_valor_base"
+                      checked={form.usar_valor_base_para_venda}
+                      onChange={(e) => handleInputChange('usar_valor_base_para_venda', e.target.checked)}
+                      disabled={loading}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <Label htmlFor="usar_valor_base" className="text-sm font-medium cursor-pointer">
+                      Usar valor base para venda
+                    </Label>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="valor_venda" className="text-sm font-medium">Valor da Venda (R$) *</Label>
+                    <Input
+                      id="valor_venda"
+                      type="number"
+                      value={form.valor_venda || ''}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        handleInputChange('valor_venda', value ? parseFloat(value) : '')
+                        // Se mudou manualmente o valor, desmarcar o checkbox
+                        if (value && parseFloat(value) !== parseFloat(form.valor_base_plano?.toString() || '0')) {
+                          handleInputChange('usar_valor_base_para_venda', false)
+                        }
+                      }}
+                      placeholder="0,00"
+                      min="0"
+                      step="0.01"
+                      disabled={loading || form.usar_valor_base_para_venda}
+                    />
+                    {form.usar_valor_base_para_venda && (
+                      <p className="text-xs text-muted-foreground">
+                        Valor preenchido automaticamente com o valor base do plano
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
+            )}
 
-              <div className="flex gap-3 pt-6 border-t">
-                <Button
-                  onClick={handleSave}
-                  disabled={loading || !form.nome.trim()}
-                  className="flex-1"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Salvar Cliente
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleCancel}
-                  disabled={loading}
-                  className="flex-1"
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Cancelar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-    </>
+            <div className="md:col-span-2 space-y-2">
+              <Label htmlFor="endereco" className="text-sm font-medium">Endereço</Label>
+              <Input
+                id="endereco"
+                value={form.endereco}
+                onChange={(e) => handleInputChange('endereco', e.target.value)}
+                placeholder="Endereço completo"
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-6 border-t">
+            <Button
+              onClick={handleSubmit}
+              disabled={loading || !form.nome.trim()}
+              className="flex-1"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Criar Cliente
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={loading}
+              className="flex-1"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Cancelar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

@@ -3,6 +3,8 @@ export interface MetaAdsInsights {
   impressions: string
   clicks: string
   reach: string
+  date_start?: string
+  date_stop?: string
 }
 
 export interface MetaAdsData {
@@ -20,10 +22,9 @@ export interface MetaAdsMetrics {
   investimentoPorLead: number
   alcance: number
   cpcMedio: number
-  leadsDoMes: number
-  leadsQualificados: number
   reunioesMarcadas: number
-  novosClientes: number
+  reunioesRealizadas: number
+  novosFechamentos: number
 }
 
 export interface MonthlyInvestment {
