@@ -66,9 +66,9 @@ export function PeriodoFiltro({ periodo, onPeriodoChange, className }: PeriodoFi
   }
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex flex-col sm:flex-row items-stretch sm:items-center gap-2", className)}>
       <Select value={periodo} onValueChange={handlePeriodoChange}>
-        <SelectTrigger className="w-auto">
+        <SelectTrigger className="w-full sm:w-auto min-w-[180px]">
           <SelectValue placeholder="Selecione o período" />
         </SelectTrigger>
         <SelectContent>
@@ -89,12 +89,12 @@ export function PeriodoFiltro({ periodo, onPeriodoChange, className }: PeriodoFi
             id="date"
             variant={"outline"}
             className={cn(
-              "w-[300px] justify-start text-left font-normal",
+              "w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px] justify-start text-left font-normal",
               !date && "text-muted-foreground"
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {getLabel()}
+            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{getLabel()}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">

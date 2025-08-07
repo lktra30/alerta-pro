@@ -97,13 +97,13 @@ export function ComissaoPage() {
           break
         case 'ultimos7':
           const setedays = new Date(currentDate)
-          setedays.setDate(setedays.getDate() - 7)
+          setedays.setDate(setedays.getDate() - 6) // -6 para ter exatamente 7 dias incluindo hoje
           dataInicio = setedays
           dataFim = currentDate
           break
         case 'ultimos30':
           const trintaDias = new Date(currentDate)
-          trintaDias.setDate(trintaDias.getDate() - 30)
+          trintaDias.setDate(trintaDias.getDate() - 29) // -29 para ter exatamente 30 dias incluindo hoje
           dataInicio = trintaDias
           dataFim = currentDate
           break
@@ -299,120 +299,129 @@ export function ComissaoPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <DollarSign className="h-8 w-8 text-green-600" />
-              Comissões
-            </h1>
-            <p className="text-muted-foreground">
-              Sistema de comissionamento baseado em desempenho e metas
-            </p>
+      {/* Header Responsivo */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 truncate">
+                <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-600 flex-shrink-0" />
+                Comissões
+              </h1>
+              <p className="text-muted-foreground text-sm sm:text-base">
+                Sistema de comissionamento baseado em desempenho e metas
+              </p>
+            </div>
+            
+            <div className="w-full sm:w-auto">
+              <PeriodoFiltro periodo={periodoFilter} onPeriodoChange={handleFilterChange} />
+            </div>
           </div>
-          
-          <PeriodoFiltro periodo={periodoFilter} onPeriodoChange={handleFilterChange} />
+          <Button onClick={() => setShowConfig(true)} className="w-full sm:w-auto flex-shrink-0">
+            <Settings className="mr-2 h-4 w-4" />
+            Configurar
+          </Button>
         </div>
-        <Button onClick={() => setShowConfig(true)}>
-          <Settings className="mr-2 h-4 w-4" />
-          Configurar
-        </Button>
       </div>
 
-      {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total em Comissões</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(totalComissoes)}</div>
-          </CardContent>
-        </Card>
+      {/* Cards de Resumo - Responsivo com scroll horizontal */}
+      <div className="w-full">
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-4 lg:grid lg:grid-cols-4 lg:gap-6 min-w-max lg:min-w-0">
+            <Card className="w-80 lg:w-auto flex-shrink-0 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total em Comissões</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <div className="text-xl sm:text-2xl font-bold text-green-600 truncate">{formatCurrency(totalComissoes)}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">MRR Total</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{formatCurrency(mrrTotal)}</div>
-          </CardContent>
-        </Card>
+            <Card className="w-80 lg:w-auto flex-shrink-0 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">MRR Total</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <div className="text-xl sm:text-2xl font-bold text-blue-600 truncate">{formatCurrency(mrrTotal)}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Colaboradores Ativos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{comissoes.length}</div>
-          </CardContent>
-        </Card>
+            <Card className="w-80 lg:w-auto flex-shrink-0 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Colaboradores Ativos</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <div className="text-xl sm:text-2xl font-bold text-purple-600">{comissoes.length}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {periodoFilter === 'hoje' ? 'Comissões Hoje' :
-               periodoFilter === 'ontem' ? 'Comissões Ontem' :
-               periodoFilter === 'ultimos7' ? 'Comissões (7 dias)' :
-               periodoFilter === 'ultimos30' ? 'Comissões (30 dias)' :
-               periodoFilter === 'esteMes' ? 'Comissões Este Mês' :
-               periodoFilter === 'mesPassado' ? 'Comissões Mês Passado' : 'Comissões Período'}
-            </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{formatCurrency(totalComissoes)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Comissões no período selecionado</p>
-          </CardContent>
-        </Card>
+            <Card className="w-80 lg:w-auto flex-shrink-0 overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium truncate">
+                  {periodoFilter === 'hoje' ? 'Comissões Hoje' :
+                   periodoFilter === 'ontem' ? 'Comissões Ontem' :
+                   periodoFilter === 'ultimos7' ? 'Comissões (7 dias)' :
+                   periodoFilter === 'ultimos30' ? 'Comissões (30 dias)' :
+                   periodoFilter === 'esteMes' ? 'Comissões Este Mês' :
+                   periodoFilter === 'mesPassado' ? 'Comissões Mês Passado' : 'Comissões Período'}
+                </CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <div className="text-xl sm:text-2xl font-bold text-orange-600 truncate">{formatCurrency(totalComissoes)}</div>
+                <p className="text-xs text-muted-foreground mt-1">Comissões no período selecionado</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Lista de SDRs */}
-      <Card>
+      {/* Lista de SDRs - Responsiva */}
+      <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-blue-600" />
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
             SDRs - Reuniões
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 sm:p-6">
           {comissoes.filter(c => c.tipo === 'sdr').map((item) => {
             const comissaoSDR = item.comissao as ComissaoSDRResult
             return (
-              <div key={item.colaborador.id} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold">{item.colaborador.nome}</h3>
-                    <Badge variant="outline">{getTipoLabel(item.tipo)}</Badge>
-                    {getCheckpointBadge(item.percentualMeta)}
+              <div key={item.colaborador.id} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h3 className="font-semibold truncate">{item.colaborador.nome}</h3>
+                    <Badge variant="outline" className="flex-shrink-0">{getTipoLabel(item.tipo)}</Badge>
+                    <div className="flex-shrink-0">{getCheckpointBadge(item.percentualMeta)}</div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-green-600">
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-lg sm:text-xl font-bold text-green-600 truncate">
                       {formatCurrency(comissaoSDR.total)}
                     </div>
                   </div>
                 </div>
                 
-                <div className="text-sm text-muted-foreground mb-2">
+                <div className="text-sm text-muted-foreground mb-2 truncate">
                   {getMetaInfo(item)}
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="min-w-0">
                     <span className="font-medium">Total Reuniões</span>
                     <div>{comissaoSDR.reunioes.qualificadas}</div>
                     <div className="text-xs text-muted-foreground">{item.percentualMeta.toFixed(1)}% da meta</div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-medium">Comissão Base</span>
-                    <div className="text-blue-600">{formatCurrency(comissaoSDR.comissaoBase)}</div>
+                    <div className="text-blue-600 truncate">{formatCurrency(comissaoSDR.comissaoBase)}</div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-medium">Bônus Meta</span>
-                    <div className="text-green-600">{formatCurrency(comissaoSDR.bonus)}</div>
+                    <div className="text-green-600 truncate">{formatCurrency(comissaoSDR.bonus)}</div>
                   </div>
                 </div>
 
@@ -429,57 +438,57 @@ export function ComissaoPage() {
         </CardContent>
       </Card>
 
-      {/* Lista de Closers */}
-      <Card>
+      {/* Lista de Closers - Responsiva */}
+      <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-purple-600" />
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" />
             Closers - Vendas
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 sm:p-6">
           {comissoes.filter(c => c.tipo === 'closer').map((item) => {
             const comissaoCloser = item.comissao as ComissaoCloserResult
             return (
-              <div key={item.colaborador.id} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold">{item.colaborador.nome}</h3>
-                    <Badge variant="outline">{getTipoLabel(item.tipo)}</Badge>
-                    {getCheckpointBadge(item.percentualMeta)}
+              <div key={item.colaborador.id} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h3 className="font-semibold truncate">{item.colaborador.nome}</h3>
+                    <Badge variant="outline" className="flex-shrink-0">{getTipoLabel(item.tipo)}</Badge>
+                    <div className="flex-shrink-0">{getCheckpointBadge(item.percentualMeta)}</div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-green-600">
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-lg sm:text-xl font-bold text-green-600 truncate">
                       {formatCurrency(comissaoCloser.total)}
                     </div>
                   </div>
                 </div>
                 
-                <div className="text-sm text-muted-foreground mb-2">
+                <div className="text-sm text-muted-foreground mb-2 truncate">
                   MRR no período: {formatCurrency((item.comissao as ComissaoCloserResult).mrrGerado)}
                 </div>
 
-                {/* Informações de planos vendidos */}
-                <div className="grid grid-cols-4 gap-2 mb-3 p-2 bg-muted/30 rounded text-xs">
-                  <div className="text-center">
+                {/* Informações de planos vendidos - Responsiva */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 p-2 bg-muted/30 rounded text-xs">
+                  <div className="text-center min-w-0">
                     <div className="font-medium text-muted-foreground">Mensal</div>
                     <div className="font-bold">
                       {comissaoCloser.detalhesVendas.filter(v => v.tipo_plano === 'mensal').length}
                     </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center min-w-0">
                     <div className="font-medium text-muted-foreground">Trimestral</div>
                     <div className="font-bold">
                       {comissaoCloser.detalhesVendas.filter(v => v.tipo_plano === 'trimestral').length}
                     </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center min-w-0">
                     <div className="font-medium text-muted-foreground">Semestral</div>
                     <div className="font-bold">
                       {comissaoCloser.detalhesVendas.filter(v => v.tipo_plano === 'semestral').length}
                     </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center min-w-0">
                     <div className="font-medium text-muted-foreground">Anual</div>
                     <div className="font-bold">
                       {comissaoCloser.detalhesVendas.filter(v => v.tipo_plano === 'anual').length}
@@ -487,19 +496,19 @@ export function ComissaoPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="min-w-0">
                     <span className="font-medium">Vendas</span>
                     <div>{comissaoCloser.detalhesVendas.length}</div>
                     <div className="text-xs text-muted-foreground">{item.percentualMeta.toFixed(1)}% da meta</div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-medium">Comissão Vendas</span>
-                    <div className="text-blue-600">{formatCurrency(comissaoCloser.comissaoVendas)}</div>
+                    <div className="text-blue-600 truncate">{formatCurrency(comissaoCloser.comissaoVendas)}</div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-medium">Bônus Meta</span>
-                    <div className="text-green-600">{formatCurrency(comissaoCloser.bonusMeta)}</div>
+                    <div className="text-green-600 truncate">{formatCurrency(comissaoCloser.bonusMeta)}</div>
                   </div>
                 </div>
 

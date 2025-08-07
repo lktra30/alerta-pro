@@ -164,14 +164,14 @@ export function MonthlySalesChart() {
     }
   }
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
-        <CardTitle>Vendas Mensais</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-base sm:text-lg">Vendas Mensais</CardTitle>
+        <CardDescription className="text-sm">
           Evolução das vendas nos últimos meses
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col min-h-[500px]">
+      <CardContent className="flex flex-col min-h-[500px] p-4 sm:p-6">
         {error && (
           <div className="flex items-center justify-center h-[300px] text-muted-foreground">
             <p className="text-sm">{error}</p>
@@ -191,14 +191,14 @@ export function MonthlySalesChart() {
           <>
             {/* Gráfico centralizado */}
             <div className="flex-1 flex items-center justify-center py-4">
-              <div className="h-[300px] w-full max-w-4xl">
+              <div className="h-[250px] sm:h-[300px] w-full max-w-4xl">
                 <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={monthlySalesData}
                   margin={{
                     top: 20,
-                    right: 30,
-                    left: 20,
+                    right: 15,
+                    left: 10,
                     bottom: 20
                   }}
                 >
@@ -206,11 +206,12 @@ export function MonthlySalesChart() {
                   <XAxis 
                     dataKey="month" 
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 10 }}
+                    interval="preserveStartEnd"
                   />
                   <YAxis 
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 10 }}
                     tickFormatter={formatCurrencyShort}
                   />
                   <Tooltip 
@@ -225,19 +226,19 @@ export function MonthlySalesChart() {
                         const data = payload[0].payload
                         const ticketMedio = data.clientCount > 0 ? data.sales / data.clientCount : 0
                         return (
-                          <div className="bg-background border border-border rounded-md p-3 shadow-md">
-                            <p className="font-medium mb-2">{label}</p>
+                          <div className="bg-background border border-border rounded-md p-3 shadow-md max-w-xs">
+                            <p className="font-medium mb-2 text-sm">{label}</p>
                             <div className="space-y-1">
-                              <p className="text-sm">
+                              <p className="text-xs">
                                 <span className="text-green-600">📊 Quantidade:</span> {data.clientCount} venda{data.clientCount !== 1 ? 's' : ''}
                               </p>
-                              <p className="text-sm">
+                              <p className="text-xs">
                                 <span className="text-green-600">📈 MRR:</span> {formatCurrency(data.mrr)}
                               </p>
-                              <p className="text-sm">
+                              <p className="text-xs">
                                 <span className="text-green-600">💰 Faturamento:</span> {formatCurrency(data.sales)}
                               </p>
-                              <p className="text-sm">
+                              <p className="text-xs">
                                 <span className="text-green-600">🎯 Ticket Médio:</span> {formatCurrency(ticketMedio)}
                               </p>
                             </div>
@@ -251,18 +252,18 @@ export function MonthlySalesChart() {
                     type="monotone" 
                     dataKey="sales" 
                     stroke="hsl(var(--chart-1))" 
-                    strokeWidth={3}
-                    dot={{ fill: 'hsl(var(--chart-1))', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, stroke: 'hsl(var(--chart-1))', strokeWidth: 2 }}
+                    strokeWidth={2}
+                    dot={{ fill: 'hsl(var(--chart-1))', strokeWidth: 2, r: 3 }}
+                    activeDot={{ r: 5, stroke: 'hsl(var(--chart-1))', strokeWidth: 2 }}
                     name="Vendas"
                   />
                   <Line 
                     type="monotone" 
                     dataKey="mrr" 
                     stroke="#22c55e" 
-                    strokeWidth={3}
-                    dot={{ fill: '#22c55e', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, stroke: '#22c55e', strokeWidth: 2 }}
+                    strokeWidth={2}
+                    dot={{ fill: '#22c55e', strokeWidth: 2, r: 3 }}
+                    activeDot={{ r: 5, stroke: '#22c55e', strokeWidth: 2 }}
                     name="MRR"
                   />
                 </LineChart>
@@ -271,31 +272,31 @@ export function MonthlySalesChart() {
             </div>
             
             {/* Summary Stats - Parte inferior */}
-            <div className="grid grid-cols-4 gap-4 pt-6 border-t mt-auto">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-6 border-t mt-auto">
+              <div className="text-center min-w-0">
+                <p className="text-lg sm:text-2xl font-bold text-green-600 truncate">
                   {summaryStats.totalSales}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Vendas no Período</p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
+              <div className="text-center min-w-0">
+                <p className="text-lg sm:text-2xl font-bold text-green-600 truncate">
                   {formatCurrency(summaryStats.currentMonthMRR)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   MRR em {new Date().toLocaleDateString('pt-BR', { month: 'long' })}
                 </p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
+              <div className="text-center min-w-0">
+                <p className="text-lg sm:text-2xl font-bold text-green-600 truncate">
                   {formatCurrency(summaryStats.currentMonthSales)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Vendas em {new Date().toLocaleDateString('pt-BR', { month: 'long' })}
                 </p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">
+              <div className="text-center min-w-0">
+                <p className="text-lg sm:text-2xl font-bold text-green-600 truncate">
                   {formatCurrency(summaryStats.averageTicket)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Ticket Médio</p>

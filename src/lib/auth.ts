@@ -53,7 +53,7 @@ export const authOptions: NextAuthOptions = {
           return {
             id: credentials.username,
             name: credentials.username,
-            email: `${credentials.username}@dashboard.local`
+            email: `${credentials.username}@licitamax.com.br`
           }
         }
 

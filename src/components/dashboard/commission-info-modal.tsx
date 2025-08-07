@@ -27,7 +27,11 @@ interface Plano {
   qtde_dias_trial: number
 }
 
-export function CommissionInfoModal() {
+interface CommissionInfoModalProps {
+  trigger?: React.ReactNode
+}
+
+export function CommissionInfoModal({ trigger }: CommissionInfoModalProps) {
   const [open, setOpen] = useState(false)
   const [planos, setPlanos] = useState<Plano[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,14 +59,18 @@ export function CommissionInfoModal() {
     return plano.valor - plano.desconto
   }
 
+  const defaultTrigger = (
+    <Button variant="outline" size="sm" className="gap-2">
+      <Info className="h-4 w-4" />
+      <span className="hidden sm:inline">Sistema de Comissão</span>
+      <span className="sm:hidden">Comissão</span>
+    </Button>
+  )
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Info className="h-4 w-4" />
-          <span className="hidden sm:inline">Sistema de Comissão</span>
-          <span className="sm:hidden">Comissão</span>
-        </Button>
+        {trigger || defaultTrigger}
       </DialogTrigger>
       <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader className="pb-4 sm:pb-6">

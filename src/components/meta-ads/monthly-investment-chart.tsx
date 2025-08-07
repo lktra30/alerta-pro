@@ -8,9 +8,10 @@ import { MetaAdsService } from "@/lib/meta-ads"
 
 interface MonthlyInvestmentChartProps {
   isLoading?: boolean
+  allowCurrentMonthCheck?: boolean // Se true, faz verificação especial do mês atual
 }
 
-export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProps) {
+export function MonthlyInvestmentChart({ isLoading, allowCurrentMonthCheck = false }: MonthlyInvestmentChartProps) {
   const [data, setData] = useState<MonthlyInvestment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -43,21 +44,89 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
         if (monthlyInsights.data && monthlyInsights.data.length > 0) {
           console.log('Using monthly insights from API:', monthlyInsights.data.length, 'months')
           
-          const monthlyChartData = monthlyInsights.data
-            .map((insight) => {
-              // Usar date_start real da API ao invés de calcular por índice
-              const dateString = insight.date_start || insight.date_stop || '2023-01-01'
-              const date = new Date(dateString)
-              const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+          // Criar um Map para facilitar a verificação do mês atual
+          const monthlyDataMap = new Map()
+          
+          // Processar dados da API e adicionar ao Map
+          monthlyInsights.data.forEach((insight) => {
+            const dateString = insight.date_start || insight.date_stop || '2023-01-01'
+            const date = new Date(dateString)
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+            const spend = parseFloat(insight.spend || "0")
+            
+            monthlyDataMap.set(monthKey, (monthlyDataMap.get(monthKey) || 0) + spend)
+          })
+          
+          // Lógica inteligente para mês atual - verificar dados específicos do mês
+          const now = new Date()
+          const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+          const dayOfMonth = now.getDate()
+          
+          // Se o mês atual tem valor 0 ou não existe E estamos nos primeiros 10 dias,
+          // fazer consulta específica para este mês (APENAS se allowCurrentMonthCheck = true)
+          const currentMonthValue = monthlyDataMap.get(currentMonth) || 0
+          if (allowCurrentMonthCheck && currentMonthValue === 0 && dayOfMonth <= 10) {
+            console.log(`Current month ${currentMonth} has 0 value, checking specific month data...`)
+            
+            try {
+              // Consulta específica para o mês atual
+              const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+              const currentMonthEnd = now.toISOString().split('T')[0]
               
-              return {
-                date: monthKey + '-01',
-                investido: parseFloat(insight.spend || "0"),
-                originalData: insight // Manter dados originais para debug
+              console.log(`Checking current month from ${currentMonthStart} to ${currentMonthEnd}`)
+              
+              const currentMonthInsights = await metaAdsService.getDailyInsights(currentMonthStart, currentMonthEnd)
+              let currentMonthTotal = 0
+              
+              if (currentMonthInsights.data) {
+                currentMonthTotal = currentMonthInsights.data.reduce((sum, insight) => {
+                  return sum + parseFloat(insight.spend || "0")
+                }, 0)
               }
-            })
-            .filter(item => item.investido > 0) // Remover meses com investimento zero
+              
+              console.log(`Current month specific check: R$ ${currentMonthTotal}`)
+              
+              if (currentMonthTotal > 0) {
+                monthlyDataMap.set(currentMonth, currentMonthTotal)
+                console.log(`Updated current month ${currentMonth} with actual value: R$ ${currentMonthTotal}`)
+              } else {
+                console.log(`Current month ${currentMonth} confirmed as 0, not including`)
+              }
+            } catch (error) {
+              console.log(`Error checking current month specifically:`, error)
+              // Em caso de erro, não incluir o mês
+            }
+                      } else if (!monthlyDataMap.has(currentMonth) && allowCurrentMonthCheck) {
+              monthlyDataMap.set(currentMonth, 0)
+              console.log(`Added current month ${currentMonth} with 0 investment to API data`)
+            }
+          
+          const monthlyChartData = Array.from(monthlyDataMap.entries())
+            .map(([monthKey, totalSpend]) => ({
+              date: monthKey + '-01',
+              investido: totalSpend,
+            }))
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .filter(item => {
+              // Lógica inteligente para filtrar meses
+              const now = new Date()
+              const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+              const itemMonth = item.date.substring(0, 7)
+              const dayOfMonth = now.getDate()
+              
+              // Sempre manter meses com investimento > 0
+              if (item.investido > 0) return true
+              
+              // Para o mês atual com investimento = 0:
+              // - Se allowCurrentMonthCheck é false (dashboard), sempre incluir
+              // - Se allowCurrentMonthCheck é true (Meta Ads), aplicar lógica de filtro
+              if (itemMonth === currentMonth) {
+                return !allowCurrentMonthCheck || dayOfMonth > 10
+              }
+              
+              // Outros meses com investimento 0: não incluir
+              return false
+            })
           
           console.log('Final monthly data from API:', monthlyChartData)
           setData(monthlyChartData)
@@ -101,6 +170,49 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
 
       console.log('Monthly aggregation:', Array.from(monthlyMap.entries()))
 
+      // Lógica inteligente para mês atual (agregação diária) - verificar dados específicos
+      const now = new Date()
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const dayOfMonth = now.getDate()
+      
+      // Se o mês atual tem valor 0 E estamos nos primeiros 10 dias, fazer consulta específica (APENAS se allowCurrentMonthCheck = true)
+      const currentMonthValue = monthlyMap.get(currentMonth) || 0
+      if (allowCurrentMonthCheck && currentMonthValue === 0 && dayOfMonth <= 10) {
+        console.log(`Current month ${currentMonth} has 0 value in daily aggregation, checking specific month data...`)
+        
+        try {
+          // Consulta específica para o mês atual
+          const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+          const currentMonthEnd = now.toISOString().split('T')[0]
+          
+          console.log(`Checking current month from ${currentMonthStart} to ${currentMonthEnd}`)
+          
+          const currentMonthInsights = await metaAdsService.getDailyInsights(currentMonthStart, currentMonthEnd)
+          let currentMonthTotal = 0
+          
+          if (currentMonthInsights.data) {
+            currentMonthTotal = currentMonthInsights.data.reduce((sum, insight) => {
+              return sum + parseFloat(insight.spend || "0")
+            }, 0)
+          }
+          
+          console.log(`Current month specific check (daily aggregation): R$ ${currentMonthTotal}`)
+          
+          if (currentMonthTotal > 0) {
+            monthlyMap.set(currentMonth, currentMonthTotal)
+            console.log(`Updated current month ${currentMonth} with actual value: R$ ${currentMonthTotal}`)
+          } else {
+            console.log(`Current month ${currentMonth} confirmed as 0, not including`)
+          }
+        } catch (error) {
+          console.log(`Error checking current month specifically (daily aggregation):`, error)
+          // Em caso de erro, não incluir o mês
+        }
+              } else if (!monthlyMap.has(currentMonth) && allowCurrentMonthCheck) {
+          monthlyMap.set(currentMonth, 0)
+          console.log(`Added current month ${currentMonth} with 0 investment`)
+        }
+
       // Converter para array e ordenar
       const monthlyChartData = Array.from(monthlyMap.entries())
         .map(([monthKey, totalSpend]) => ({
@@ -108,7 +220,26 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
           investido: totalSpend,
         }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .filter(item => item.investido > 0) // Remover meses com investimento zero
+        .filter(item => {
+          // Lógica inteligente para filtrar meses (agregação diária)
+          const now = new Date()
+          const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+          const itemMonth = item.date.substring(0, 7)
+          const dayOfMonth = now.getDate()
+          
+          // Sempre manter meses com investimento > 0
+          if (item.investido > 0) return true
+          
+          // Para o mês atual com investimento = 0:
+          // - Se allowCurrentMonthCheck é false (dashboard), sempre incluir
+          // - Se allowCurrentMonthCheck é true (Meta Ads), aplicar lógica de filtro
+          if (itemMonth === currentMonth) {
+            return !allowCurrentMonthCheck || dayOfMonth > 10
+          }
+          
+          // Outros meses com investimento 0: não incluir
+          return false
+        })
       
       console.log('Final monthly data from daily aggregation:', monthlyChartData)
       setData(monthlyChartData)
@@ -122,12 +253,12 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
 
   if (isLoading || loading) {
     return (
-      <Card className="col-span-full">
+      <Card className="col-span-full overflow-hidden">
         <CardHeader>
-          <CardTitle>Investimento Mensal em Meta Ads</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Investimento Mensal em Meta Ads</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-80 flex items-center justify-center">
+        <CardContent className="p-4 sm:p-6">
+          <div className="h-64 sm:h-80 flex items-center justify-center">
             <div className="animate-pulse text-muted-foreground">
               Carregando dados do gráfico...
             </div>
@@ -161,7 +292,6 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
       const data = payload[0]
       const date = new Date(label + 'T00:00:00')
       const formattedDate = date.toLocaleDateString('pt-BR', {
-        day: '2-digit',
         month: 'long',
         year: 'numeric'
       })
@@ -182,16 +312,16 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
   }
 
   return (
-    <Card className="col-span-full">
+    <Card className="col-span-full overflow-hidden">
       <CardHeader>
-        <CardTitle className="text-xl font-semibold text-green-500">
+        <CardTitle className="text-base sm:text-xl font-semibold text-green-500">
           Investimento Mensal em Meta Ads
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="h-80">
+      <CardContent className="p-4 sm:p-6">
+        <div className="h-64 sm:h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={data} margin={{ top: 5, right: 15, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis 
                 dataKey="date" 
@@ -199,21 +329,24 @@ export function MonthlyInvestmentChart({ isLoading }: MonthlyInvestmentChartProp
                 className="text-muted-foreground text-xs"
                 axisLine={false}
                 tickLine={false}
+                tick={{ fontSize: 10 }}
+                interval="preserveStartEnd"
               />
               <YAxis 
                 tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
                 className="text-muted-foreground text-xs"
                 axisLine={false}
                 tickLine={false}
+                tick={{ fontSize: 10 }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Line 
                 type="monotone" 
                 dataKey="investido" 
                 stroke="#22c55e" 
-                strokeWidth={3}
-                dot={{ fill: "#22c55e", strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6, fill: "#22c55e" }}
+                strokeWidth={2}
+                dot={{ fill: "#22c55e", strokeWidth: 2, r: 3 }}
+                activeDot={{ r: 5, fill: "#22c55e" }}
               />
             </LineChart>
           </ResponsiveContainer>

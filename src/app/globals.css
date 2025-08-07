@@ -116,7 +116,122 @@
   * {
     @apply border-border outline-ring/50;
   }
+  
+  html {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+    min-height: 100vh;
   }
+  
+  /* Prevenir overflow horizontal em todos os containers principais */
+  #__next,
+  [data-radix-portal] {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+  
+  /* Garantir que elementos flex e grid não excedam a viewport */
+  .flex, .grid {
+    min-width: 0;
+  }
+  
+  /* Melhorar comportamento de scroll em containers específicos */
+  .overflow-x-auto {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .overflow-x-auto::-webkit-scrollbar {
+    height: 6px;
+  }
+  
+  .overflow-x-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .overflow-x-auto::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+  }
+  
+  .dark .overflow-x-auto::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  /* Melhorar responsividade de elementos que podem causar overflow */
+  .min-w-max {
+    min-width: max-content;
+  }
+  
+  /* Garantir que cards não quebrem o layout */
+  [data-card] {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  /* Prevenir overflow em elementos de texto */
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  
+  /* Melhoria para modais e popovers */
+  [data-radix-popper-content-wrapper] {
+    max-width: calc(100vw - 32px) !important;
+  }
+}
+
+/* Melhorias para drag & drop */
+.dragging {
+  z-index: 1000;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 2px solid rgb(59 130 246);
+  cursor: grabbing !important;
+}
+
+/* Desabilitar text selection durante drag */
+body.dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Touch device improvements */
+@media (hover: none) and (pointer: coarse) {
+  .cursor-move {
+    cursor: grab;
+  }
+  
+  .cursor-move:active {
+    cursor: grabbing;
+  }
+}
+
+/* Animação para o placeholder de drop */
+@keyframes drop-zone-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.8;
+  }
+}
+
+.drop-zone-active {
+  animation: drop-zone-pulse 2s ease-in-out infinite;
 }

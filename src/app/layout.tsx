@@ -4,8 +4,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
-  title: "Dashboard AlertaPro",
-  description: "Dashboard de análise e CRM da AlertaPro",
+  title: "Licitamax - Alerta Pro - Dashboard",
+  description: "",
 };
 
 export default function RootLayout({

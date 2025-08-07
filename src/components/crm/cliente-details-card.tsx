@@ -11,7 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Eye, Edit, Save, X, Loader2, User, Mail, Phone, Building, MapPin, DollarSign } from "lucide-react"
 import { updateCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
@@ -328,61 +334,55 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
   const closerColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Eye className="h-5 w-5 text-primary" />
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Eye className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="truncate">Editar Cliente</DialogTitle>
+                <DialogDescription className="truncate">Edite as informações do cliente</DialogDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle>Editar Cliente</CardTitle>
-              <CardDescription>Edite as informações do cliente</CardDescription>
+            <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0">
+              <Badge className={getEtapaColor(cliente.etapa)} variant="outline">
+                {cliente.etapa}
+              </Badge>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">ID: #{cliente.id}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge className={getEtapaColor(cliente.etapa)}>
-              {cliente.etapa}
-            </Badge>
-            <span className="text-sm text-muted-foreground">ID: #{cliente.id}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
+        </DialogHeader>
 
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              <div>Criado: {new Date(cliente.criado_em).toLocaleString('pt-BR')}</div>
-              <div>Atualizado: {new Date(cliente.atualizado_em).toLocaleString('pt-BR')}</div>
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="text-sm text-muted-foreground space-y-1">
+              <div className="truncate">Criado: {new Date(cliente.criado_em).toLocaleString('pt-BR')}</div>
+              <div className="truncate">Atualizado: {new Date(cliente.atualizado_em).toLocaleString('pt-BR')}</div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 sm:flex-shrink-0">
               {!isEditing ? (
-                <Button onClick={() => setIsEditing(true)} disabled={loading}>
+                <Button onClick={() => setIsEditing(true)} disabled={loading} className="w-full sm:w-auto">
                   <Edit className="h-4 w-4 mr-2" />
                   Editar
                 </Button>
               ) : (
-                <>
-                  <Button onClick={handleCancel} variant="outline" disabled={loading}>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Button onClick={handleCancel} variant="outline" disabled={loading} className="flex-1 sm:flex-none">
                     <X className="h-4 w-4 mr-2" />
                     Cancelar
                   </Button>
-                  <Button onClick={handleSave} disabled={loading}>
+                  <Button onClick={handleSave} disabled={loading} className="flex-1 sm:flex-none">
                     {loading ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
                       <Save className="h-4 w-4 mr-2" />
                     )}
-                    Salvar Alterações
+                    Salvar
                   </Button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -618,55 +618,53 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
             </div>
           ) : (
             /* View Mode */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium">{cliente.nome}</div>
+                  <User className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{cliente.nome}</div>
                     <div className="text-sm text-muted-foreground">Nome completo</div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium">{cliente.email || 'N/A'}</div>
+                  <Mail className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{cliente.email || 'N/A'}</div>
                     <div className="text-sm text-muted-foreground">Email</div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium">{cliente.telefone || 'N/A'}</div>
+                  <Phone className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{cliente.telefone || 'N/A'}</div>
                     <div className="text-sm text-muted-foreground">Telefone</div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Building className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium">{cliente.empresa || 'N/A'}</div>
+                  <Building className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{cliente.empresa || 'N/A'}</div>
                     <div className="text-sm text-muted-foreground">Empresa</div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <MapPin className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium">{cliente.endereco || 'N/A'}</div>
+                  <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{cliente.endereco || 'N/A'}</div>
                     <div className="text-sm text-muted-foreground">Endereço</div>
                   </div>
                 </div>
 
                 {cliente.valor_venda && (
                   <div className="flex items-center gap-3">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium">{formatCurrency(cliente.valor_venda)}</div>
+                    <DollarSign className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{formatCurrency(cliente.valor_venda)}</div>
                       <div className="text-sm text-muted-foreground">Valor da venda</div>
                     </div>
                   </div>
@@ -674,9 +672,9 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
 
                 {cliente.tipo_plano && (
                   <div className="flex items-center gap-3">
-                    <div className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium">{cliente.tipo_plano}</div>
+                    <div className="h-5 w-5 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{cliente.tipo_plano}</div>
                       <div className="text-sm text-muted-foreground">Tipo do plano</div>
                     </div>
                   </div>
@@ -684,9 +682,9 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
 
                 {cliente.data_fechamento && (
                   <div className="flex items-center gap-3">
-                    <div className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium">{new Date(cliente.data_fechamento).toLocaleDateString('pt-BR')}</div>
+                    <div className="h-5 w-5 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{new Date(cliente.data_fechamento).toLocaleDateString('pt-BR')}</div>
                       <div className="text-sm text-muted-foreground">Data de fechamento</div>
                     </div>
                   </div>
@@ -694,8 +692,8 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

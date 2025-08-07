@@ -1,100 +1,132 @@
 "use client"
 
 import { 
-  BarChart3, 
+  LayoutDashboard, 
   Home, 
   Settings, 
   Users,
   DollarSign,
-  Search,
-  Target
+  Target,
+  ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-// import { EditGoalsPopover } from "./edit-goals-popover"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useState } from "react"
 
 const sidebarItems = [
   {
     title: "Visão Geral",
     icon: Home,
-    badge: null,
     href: "/"
   },
   {
     title: "Meta Ads",
     icon: Target,
-    badge: null,
     href: "/meta-ads"
   },
   {
     title: "Comissão",
     icon: DollarSign,
-    badge: null,
     href: "/comissao"
   },
   {
     title: "CRM",
     icon: Users,
-    badge: null,
     href: "/crm"
   },
   {
     title: "Configurações",
     icon: Settings,
-    badge: null,
     href: "/configuracoes"
   }
 ]
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  className?: string
+}
+
+export function DashboardSidebar({ className }: DashboardSidebarProps = {}) {
   const pathname = usePathname()
+  const [isExpanded, setIsExpanded] = useState(false)
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-background">
+    <div 
+      className={cn(
+        "group flex h-full flex-col border-r bg-background transition-all duration-300 ease-in-out",
+        isExpanded ? "w-64" : "w-16",
+        className
+      )}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
       {/* Logo/Brand */}
       <div className="flex h-16 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center">
-            <BarChart3 className="h-5 w-5 text-white" />
+        <Link href="/" className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+            <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
           </div>
-          <h1 className="text-lg font-semibold">Alerta Pro</h1>
+          <h1 className={cn(
+            "text-lg font-semibold transition-all duration-300",
+            isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none"
+          )}>
+            Dashboard
+          </h1>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-2">
-        <ul className="space-y-1">
-          {sidebarItems.map((item) => (
-            <li key={item.title}>
-              <Link href={item.href} className="block">
-                <Button
-                  variant={pathname === item.href ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start gap-3 h-10",
-                    pathname === item.href && "bg-secondary text-secondary-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span className="flex-1 text-left">{item.title}</span>
-                  {item.badge && (
-                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                      {item.badge}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
-            </li>
-          ))}
-          
-          {/* Special Edit Goals Item
-          <li>
-            <EditGoalsPopover />
-          </li> */}
+      <nav className="flex-1 p-2">
+        <ul className="space-y-2">
+          {sidebarItems.map((item) => {
+            const isActive = pathname === item.href
+            
+            return (
+              <li key={item.title}>
+                <Link href={item.href} className="block">
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start gap-3 h-12 px-3 transition-all duration-200",
+                      isActive && "bg-primary/10 text-primary border border-primary/20",
+                      !isActive && "hover:bg-muted/50"
+                    )}
+                  >
+                    <item.icon className={cn(
+                      "h-5 w-5 flex-shrink-0",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )} />
+                    <span className={cn(
+                      "text-sm font-medium transition-all duration-300",
+                      isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none",
+                      isActive ? "text-primary" : "text-foreground"
+                    )}>
+                      {item.title}
+                    </span>
+                    {isActive && (
+                      <ChevronRight className={cn(
+                        "h-4 w-4 ml-auto transition-all duration-300",
+                        isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none"
+                      )} />
+                    )}
+                  </Button>
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       </nav>
+      
+      {/* Expand indicator */}
+      <div className="p-2 border-t">
+        <div className={cn(
+          "text-xs text-muted-foreground text-center transition-all duration-300",
+          isExpanded ? "opacity-100" : "opacity-0"
+        )}>
+          Passe o mouse para expandir
+        </div>
+      </div>
     </div>
   )
 }

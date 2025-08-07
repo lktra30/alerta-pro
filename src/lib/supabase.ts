@@ -1553,12 +1553,12 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
         break
       case 'ultimos7':
         const setedays = new Date(hoje)
-        setedays.setDate(setedays.getDate() - 7)
+        setedays.setDate(setedays.getDate() - 6) // -6 para ter exatamente 7 dias incluindo hoje
         dataInicio = setedays.toISOString().split('T')[0]
         break
       case 'ultimos30':
         const trintaDias = new Date(hoje)
-        trintaDias.setDate(trintaDias.getDate() - 30)
+        trintaDias.setDate(trintaDias.getDate() - 29) // -29 para ter exatamente 30 dias incluindo hoje
         dataInicio = trintaDias.toISOString().split('T')[0]
         break
       case 'esteMes':
@@ -1688,7 +1688,10 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
     const workingDaysElapsed = Math.min(currentDay, workingDays)
     
     const metaDiaria = metaMensal / workingDays
-    const faturamentoDiario = workingDaysElapsed > 0 ? totalFaturamento / workingDaysElapsed : 0
+    
+    // Buscar vendas apenas do dia atual para a meta diária (não deve ser filtrada por período)
+    const dailySalesData = await getDailySales()
+    const faturamentoDiario = dailySalesData.dailySales
     
     // O investimento total agora virá do estado do componente, não mais de valores fixos aqui.
     // O cálculo será feito no frontend com base nos dados do Meta Ads.

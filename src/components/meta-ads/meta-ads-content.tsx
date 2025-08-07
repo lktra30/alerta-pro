@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { MetaAdsPerformanceCards } from "./meta-ads-performance-cards"
+import { FilteredInvestmentChart } from "./filtered-investment-chart"
 import { MonthlyInvestmentChart } from "./monthly-investment-chart"
 import { MetaAdsService } from "@/lib/meta-ads"
 import { MetaAdsMetrics, MonthlyInvestment } from "@/types/meta-ads"
@@ -66,13 +67,13 @@ export function MetaAdsContent() {
         break
       case 'ultimos7':
         const sevenDaysAgo = new Date(currentDate)
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6) // -6 para ter exatamente 7 dias incluindo hoje
         startDate = sevenDaysAgo.toISOString().split('T')[0]
         endDate = currentDate.toISOString().split('T')[0]
         break
       case 'ultimos30':
         const thirtyDaysAgo = new Date(currentDate)
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29) // -29 para ter exatamente 30 dias incluindo hoje
         startDate = thirtyDaysAgo.toISOString().split('T')[0]
         endDate = currentDate.toISOString().split('T')[0]
         break
@@ -147,45 +148,50 @@ export function MetaAdsContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Meta Ads Performance</h1>
-            <p className="text-muted-foreground">
-              Acompanhe o desempenho dos seus anúncios no Facebook e Instagram
-            </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold truncate">Meta Ads Performance</h1>
+              <p className="text-muted-foreground text-sm sm:text-base">
+                Acompanhe o desempenho dos seus anúncios no Facebook e Instagram
+              </p>
+            </div>
+            
+            <div className="w-full sm:w-auto">
+              <PeriodoFiltro periodo={periodoFilter} onPeriodoChange={handleFilterChange} />
+            </div>
           </div>
-          
-          <PeriodoFiltro periodo={periodoFilter} onPeriodoChange={handleFilterChange} />
         </div>
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>
-            {lastUpdated 
-              ? `Última atualização: ${lastUpdated.toLocaleString('pt-BR')}`
-              : "Carregando..."
-            }
-          </span>
+        
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+            <span className="truncate">
+              {lastUpdated 
+                ? `Última atualização: ${lastUpdated.toLocaleString('pt-BR')}`
+                : "Carregando..."
+              }
+            </span>
+          </div>
+          <Button 
+            onClick={handleRefresh} 
+            disabled={isLoading}
+            variant="outline"
+            size="sm"
+            className="flex-shrink-0 w-full sm:w-auto"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
         </div>
-        <Button 
-          onClick={handleRefresh} 
-          disabled={isLoading}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </Button>
       </div>
 
       {error && (
-        <Card className="border-destructive">
+        <Card className="border-destructive overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-destructive">Aviso</CardTitle>
+            <CardTitle className="text-destructive text-base sm:text-lg">Aviso</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             <p className="text-sm text-muted-foreground mb-2">{error}</p>
             <p className="text-xs text-muted-foreground">
               Exibindo dados de exemplo. Configure a variável de ambiente NEXT_PUBLIC_META_ACCESS_TOKEN para acessar dados reais.
@@ -197,9 +203,18 @@ export function MetaAdsContent() {
       <MetaAdsPerformanceCards 
         metrics={metrics} 
         isLoading={isLoading}
+        layout="row"
       />
       
-      <MonthlyInvestmentChart isLoading={isLoading} />
+      {periodoFilter === 'all' ? (
+        <MonthlyInvestmentChart isLoading={isLoading} allowCurrentMonthCheck={true} />
+      ) : (
+        <FilteredInvestmentChart 
+          startDate={calculateDateRange().startDate}
+          endDate={calculateDateRange().endDate}
+          isLoading={isLoading} 
+        />
+      )}
     </div>
   )
 }

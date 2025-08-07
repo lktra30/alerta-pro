@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, Users, Target, CheckCircle2, Calendar, XCircle } from "lucide-react"
+import { TrendingUp, Users, CheckCircle2, Calendar, XCircle } from "lucide-react"
 import { getFunnelData, isSupabaseConfigured } from "@/lib/supabase"
 
 interface FunnelStage {
@@ -55,12 +55,12 @@ export function SalesFunnelChart({ startDate, endDate }: SalesFunnelChartProps) 
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
-        <CardTitle className="text-green-500">Funil de Vendas (Todos)</CardTitle>
-        <CardDescription>Pipeline de vendas completo</CardDescription>
+        <CardTitle className="text-green-500 text-base sm:text-lg">Funil de Vendas (Todos)</CardTitle>
+        <CardDescription className="text-sm">Pipeline de vendas completo</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 sm:p-6">
         {error && (
           <div className="flex items-center justify-center h-32 text-muted-foreground">
             <p className="text-sm">{error}</p>
@@ -79,16 +79,16 @@ export function SalesFunnelChart({ startDate, endDate }: SalesFunnelChartProps) 
               
               return (
                 <div key={stage.stage} className="relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <StageIcon className={`h-4 w-4 ${stage.stage === 'Reuniões sem Fechamento' ? 'text-red-600' : 'text-green-600'}`} />
-                      <span className="text-sm font-medium">{stage.stage}</span>
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <StageIcon className={`h-3 w-3 sm:h-4 sm:w-4 ${stage.stage === 'Reuniões sem Fechamento' ? 'text-red-600' : 'text-green-600'} flex-shrink-0`} />
+                      <span className="text-xs sm:text-sm font-medium truncate">{stage.stage}</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{stage.value}</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">{stage.value}</span>
                   </div>
                   
                   <div 
-                    className="h-12 bg-gradient-to-r from-green-200 to-green-300 relative overflow-hidden"
+                    className="h-10 sm:h-12 bg-gradient-to-r from-green-200 to-green-300 relative overflow-hidden rounded"
                     style={{ 
                       width: `${width}%`,
                       backgroundColor: stage.color,
@@ -96,7 +96,7 @@ export function SalesFunnelChart({ startDate, endDate }: SalesFunnelChartProps) 
                     }}
                   >
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-sm font-medium text-white drop-shadow-sm">
+                      <span className="text-xs sm:text-sm font-medium text-white drop-shadow-sm">
                         {stage.value}
                       </span>
                     </div>
