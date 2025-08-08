@@ -2207,14 +2207,10 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
     // Buscar TODOS os clientes para verificar etapas atuais das reuniões
     const { data: todosClientes, error: clientesError } = await supabase
       .from('clientes')
-      .select('id, etapa')
+      .select('id, etapa, sdr_id, criado_em')
 
     if (clientesError) {
       console.error('Error fetching clientes for SDR validation:', clientesError)
-      return []
-    }
-
-    if (!reunioes || reunioes.length === 0) {
       return []
     }
 
@@ -2230,33 +2226,79 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
       nome: string
       reunioes: Array<{ tipo: string }>
       vendas: Array<{ valor: number; valorBase: number; tipo: string }>
+      reunioesRealizadas: number
     }>()
 
-    // Processar reuniões - APENAS de clientes em etapas válidas
-    reunioes.forEach((reuniao: any) => {
-      const colaborador = colaboradoresMap.get(reuniao.sdr_id)
-      if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
-        // VERIFICAR SE CLIENTE ESTÁ EM ETAPA VÁLIDA
-        if (reuniao.cliente_id) {
-          const cliente = todosClientes?.find(c => c.id === reuniao.cliente_id)
-          // Só contar se cliente existe E está em etapa válida para reuniões
-          if (!cliente || !['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
-            return // Pular esta reunião
+    // Processar reuniões - APENAS de clientes em etapas válidas (se existirem)
+    if (reunioes && reunioes.length > 0) {
+      reunioes.forEach((reuniao: any) => {
+        const colaborador = colaboradoresMap.get(reuniao.sdr_id)
+        if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+          // VERIFICAR SE CLIENTE ESTÁ EM ETAPA VÁLIDA
+          if (reuniao.cliente_id) {
+            const cliente = todosClientes?.find(c => c.id === reuniao.cliente_id)
+            // Só contar se cliente existe E está em etapa válida para reuniões
+            if (!cliente || !['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
+              return // Pular esta reunião
+            }
+          }
+          
+          const sdrId = reuniao.sdr_id
+          if (!sdrsMap.has(sdrId)) {
+            sdrsMap.set(sdrId, {
+              id: sdrId,
+              nome: colaborador.nome,
+              reunioes: [],
+              vendas: [],
+              reunioesRealizadas: 0
+            })
+          }
+          sdrsMap.get(sdrId)?.reunioes.push({ tipo: reuniao.tipo })
+        }
+      })
+    }
+
+    // Processar clientes para contar reuniões realizadas (que podem não estar na tabela reunioes)
+    if (todosClientes && todosClientes.length > 0) {
+      todosClientes.forEach((cliente: any) => {
+        // Verificar se cliente está em etapa que indica reunião realizada
+        if (['Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
+          // Aplicar filtro de período se especificado
+          if (dataInicio || dataFim) {
+            if (!cliente.criado_em) {
+              return
+            }
+            
+            const clienteDate = cliente.criado_em.split('T')[0] // Pegar apenas a data, sem timestamp
+            if (dataInicio && clienteDate < dataInicio) {
+              return
+            }
+            if (dataFim && clienteDate > dataFim) {
+              return
+            }
+          }
+          
+          const sdrId = cliente.sdr_id
+          
+          if (sdrId) {
+            const colaborador = colaboradoresMap.get(sdrId)
+            
+            if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+              if (!sdrsMap.has(sdrId)) {
+                sdrsMap.set(sdrId, {
+                  id: sdrId,
+                  nome: colaborador.nome,
+                  reunioes: [],
+                  vendas: [],
+                  reunioesRealizadas: 0
+                })
+              }
+              sdrsMap.get(sdrId)!.reunioesRealizadas++
+            }
           }
         }
-        
-        const sdrId = reuniao.sdr_id
-        if (!sdrsMap.has(sdrId)) {
-          sdrsMap.set(sdrId, {
-            id: sdrId,
-            nome: colaborador.nome,
-            reunioes: [],
-            vendas: []
-          })
-        }
-        sdrsMap.get(sdrId)?.reunioes.push({ tipo: reuniao.tipo })
-      }
-    })
+      })
+    }
 
     // Processar vendas
     if (vendas) {
@@ -2279,7 +2321,8 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
                 valor: venda.valor_venda || 0,
                 valorBase: venda.valor_base_plano || venda.valor_venda || 0,
                 tipo: venda.tipo_plano || 'mensal'
-              }]
+              }],
+              reunioesRealizadas: 0
             })
           }
         }
@@ -2292,27 +2335,33 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
       const cliente = todosClientes?.find(c => c.id === reuniao.cliente_id)
       return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
     })
-    const totalReunioes = reunioesValidas.length
+    
+    // Calcular total de reuniões considerando tanto reuniões na tabela quanto realizadas pelos clientes
+    const totalReunioesMarcadas = Array.from(sdrsMap.values()).reduce((sum, sdr) => {
+      return sum + Math.max(sdr.reunioes.length, sdr.reunioesRealizadas)
+    }, 0)
     
     const topSDRs: TopSDR[] = Array.from(sdrsMap.values()).map(sdr => {
       const reunioesQualificadas = sdr.reunioes.filter(r => r.tipo === 'qualificada').length
       const vendasGeradas = sdr.vendas.length
       const totalMRRGerado = sdr.vendas.reduce((sum, v) => sum + calculateMRR(v.valorBase, v.tipo), 0)
+      
+      // Total de reuniões = MAX entre reuniões na tabela e reuniões realizadas pelos clientes
+      const totalReunioesSdr = Math.max(sdr.reunioes.length, sdr.reunioesRealizadas)
 
       return {
         id: sdr.id,
         nome: sdr.nome,
-        totalReunioes: sdr.reunioes.length,
+        totalReunioes: totalReunioesSdr,
         reunioesQualificadas,
         vendasGeradas,
         totalMRRGerado,
-        percentualReunioes: totalReunioes > 0 ? (sdr.reunioes.length / totalReunioes) * 100 : 0
+        percentualReunioes: totalReunioesMarcadas > 0 ? (totalReunioesSdr / totalReunioesMarcadas) * 100 : 0
       }
     })
 
     // Ordenar por número total de reuniões (não por MRR)
     return topSDRs.sort((a, b) => b.totalReunioes - a.totalReunioes)
-    
   } catch (error) {
     console.error('Error in getTopSDRs:', error)
     return []
