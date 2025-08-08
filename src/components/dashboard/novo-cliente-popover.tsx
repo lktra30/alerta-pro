@@ -123,12 +123,12 @@ export function NovoClientePopover() {
     }
 
     if (!form.sdr_id.trim()) {
-      alert('SDR é obrigatório')
+      // REMOVIDO: alert de SDR
       return
     }
 
     if (!form.closer_id.trim()) {
-      alert('Closer é obrigatório')
+      // REMOVIDO: alert de closer
       return
     }
 
@@ -147,7 +147,7 @@ export function NovoClientePopover() {
       if (!isSupabaseConfigured()) {
         // Mock success for demo purposes
         console.log('Cliente criado (modo demo):', form)
-        alert('Cliente criado com sucesso! (Modo demo - configure o Supabase para salvar no banco)')
+        console.log('Cliente criado com sucesso! (Modo demo)')
         resetForm()
         setOpen(false)
         return
@@ -168,7 +168,7 @@ export function NovoClientePopover() {
       })
 
       if (!result.success) {
-        alert(`Erro ao criar cliente: ${result.error}`)
+        console.log(`Erro ao criar cliente: ${result.error}`)
         return
       }
 

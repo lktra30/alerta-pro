@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { Eye, Edit, Save, X, Loader2, User, Mail, Phone, Building, MapPin, DollarSign } from "lucide-react"
 import { updateCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
 import { validateVendaRealizadaData, isVendaRealizadaDataComplete } from "@/lib/validations"
-import { Toast } from "@/components/ui/toast"
+import { useToast } from "@/components/ui/toast-provider"
 import { Cliente, EtapaEnum, Colaborador } from "@/types/database"
 
 interface ClienteForm {
@@ -107,8 +107,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
   const [loading, setLoading] = useState(false)
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [planos, setPlanos] = useState<Plano[]>([])
-  const [showToast, setShowToast] = useState(false)
-  const [toastMessage, setToastMessage] = useState("")
+  const { success, error, warning } = useToast()
   const [form, setForm] = useState<ClienteForm>({
     nome: '',
     email: '',
@@ -155,8 +154,10 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         if (!hasCompleteData) {
           // Ativar modo edição automaticamente
           setIsEditing(true)
-          setToastMessage("Para finalizar como 'Vendas Realizadas', preencha os dados obrigatórios")
-          setShowToast(true)
+          warning(
+            "Dados Obrigatórios",
+            "Para finalizar como 'Vendas Realizadas', preencha os dados obrigatórios"
+          )
         }
       }
     }
@@ -175,12 +176,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     loadData()
   }, [])
 
-  // Limpar toast quando modal fecha
-  useEffect(() => {
-    if (!isOpen) {
-      setShowToast(false)
-    }
-  }, [isOpen])
+  // Modal cleanup effect (removed toast state)
 
   const handleInputChange = (field: keyof ClienteForm, value: string | number | boolean) => {
     setForm(prev => {
@@ -237,11 +233,11 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     // Se etapa é "Vendas Realizadas", validar campos obrigatórios
     if (form.etapa === 'Vendas Realizadas') {
       if (!form.valor_venda || parseFloat(form.valor_venda.toString()) <= 0) {
-        alert('Valor da venda é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de valor da venda
         return false
       }
       if (!form.tipo_plano) {
-        alert('Tipo do plano é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de tipo do plano
         return false
       }
       if (!form.valor_base_plano || parseFloat(form.valor_base_plano.toString()) <= 0) {
@@ -249,7 +245,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         return false
       }
       if (!form.closer_id) {
-        alert('Closer é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de closer
         return false
       }
     }
@@ -304,8 +300,10 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         valor_base_plano: form.valor_base_plano
       })
       
-      setToastMessage(`Dados obrigatórios:\n• ${validation.missingFields.join('\n• ')}`)
-      setShowToast(true)
+      error(
+        "Dados Obrigatórios", 
+        `Preencha os campos:\n• ${validation.missingFields.join('\n• ')}`
+      )
     }
   }
 
@@ -323,16 +321,18 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         })
         
         if (!validation.isValid) {
-          // REMOVIDO: showValidationAlert - usar Toast interno do modal
-          setToastMessage(`Dados obrigatórios:\n• ${validation.missingFields.join('\n• ')}`)
-          setShowToast(true)
+          // Usar novo sistema de toast
+          error(
+            "Dados Obrigatórios",
+            `Preencha os campos:\n• ${validation.missingFields.join('\n• ')}`
+          )
           return
         }
       }
 
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured. Cannot save changes.')
-      alert('Configuração do banco de dados não encontrada. Não é possível salvar as alterações.')
+      console.log('Configuração do banco de dados não encontrada.')
       return
     }
 
@@ -382,14 +382,14 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         console.log('Cliente updated successfully:', updatedCliente)
         setIsEditing(false)
         onClienteUpdated?.()
-        console.log('Cliente atualizado com sucesso!')
+        success("Cliente Atualizado", "As informações do cliente foram salvas com sucesso!")
       } else {
         throw new Error('Failed to update cliente')
       }
-    } catch (error) {
-      console.error('Error updating cliente:', error)
-      console.log('Erro ao atualizar cliente. Tente novamente.')
-    } finally {
+          } catch (err) {
+        console.error('Error updating cliente:', err)
+        error("Erro ao Atualizar", "Não foi possível salvar as alterações. Tente novamente.")
+      } finally {
       setLoading(false)
     }
   }
@@ -791,15 +791,6 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         </div>
       </DialogContent>
     </Dialog>
-    
-    {/* Toast de notificação */}
-    <Toast
-      title="Dados Obrigatórios"
-      description={toastMessage}
-      variant="destructive"
-      open={showToast}
-      onOpenChange={setShowToast}
-    />
     </>
   )
 }

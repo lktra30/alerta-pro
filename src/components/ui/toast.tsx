@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 interface ToastProps {
   title?: string
   description?: string
-  variant?: "default" | "destructive"
+  variant?: "default" | "destructive" | "success" | "info" | "warning"
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -25,15 +25,28 @@ export function Toast({ title, description, variant = "default", open, onOpenCha
 
   if (!open) return null
 
+  const getVariantStyles = () => {
+    switch (variant) {
+      case "destructive":
+        return "border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+      case "success":
+        return "border-green-200 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950 dark:text-green-100"
+      case "info":
+        return "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100"
+      case "warning":
+        return "border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-100"
+      default:
+        return "border-border bg-background text-foreground"
+    }
+  }
+
   return (
     <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] w-auto sm:w-full sm:max-w-sm">
       <div
         className={cn(
-          "relative flex w-full flex-col space-y-2 rounded-md border p-3 sm:p-4 shadow-lg",
+          "relative flex w-full flex-col space-y-2 rounded-lg border p-3 sm:p-4 shadow-lg backdrop-blur-sm",
           "animate-in slide-in-from-top sm:slide-in-from-right-full duration-300",
-          variant === "destructive"
-            ? "border-destructive bg-destructive text-destructive-foreground"
-            : "border-border bg-background text-foreground"
+          getVariantStyles()
         )}
       >
         <div className="flex items-start justify-between">
@@ -67,7 +80,7 @@ export function useToast() {
     id: string
     title?: string
     description?: string
-    variant?: "default" | "destructive"
+    variant?: "default" | "destructive" | "success" | "info" | "warning"
   }>>([])
 
   const addToast = React.useCallback((toast: Omit<ToastProps, "open" | "onOpenChange">) => {

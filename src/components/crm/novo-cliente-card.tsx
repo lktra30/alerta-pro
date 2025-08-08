@@ -21,6 +21,7 @@ import {
 import { Plus, Save, X, Loader2 } from "lucide-react"
 import { createCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
 import { validateVendaRealizadaData } from "@/lib/validations"
+import { useToast } from "@/components/ui/toast-provider"
 import type { EtapaEnum, Colaborador } from "@/types/database"
 
 interface NovoClienteForm {
@@ -79,6 +80,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
   const [loading, setLoading] = useState(false)
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [planos, setPlanos] = useState<Plano[]>([])
+  const { success, error } = useToast()
   const [form, setForm] = useState<NovoClienteForm>({
     nome: '',
     email: '',
@@ -163,11 +165,11 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
     // Se etapa é "Vendas Realizadas", validar campos obrigatórios
     if (form.etapa === 'Vendas Realizadas') {
       if (!form.valor_venda || parseFloat(form.valor_venda.toString()) <= 0) {
-        alert('Valor da venda é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de valor da venda
         return false
       }
       if (!form.tipo_plano) {
-        alert('Tipo do plano é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de tipo do plano
         return false
       }
       if (!form.valor_base_plano || parseFloat(form.valor_base_plano.toString()) <= 0) {
@@ -175,7 +177,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         return false
       }
       if (!form.closer_id) {
-        alert('Closer é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de closer
         return false
       }
     }
@@ -238,7 +240,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
 
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured. Cannot save changes.')
-      alert('Configuração do banco de dados não encontrada. Não é possível salvar as alterações.')
+      console.log('Configuração do banco de dados não encontrada.')
       return
     }
 
@@ -273,14 +275,14 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         resetForm()
         onClienteAdicionado?.()
         onOpenChange(false)
-        console.log('Cliente criado com sucesso!')
+        success("Cliente Criado", "O cliente foi adicionado com sucesso!")
       } else {
         throw new Error('Failed to create cliente')
       }
-    } catch (error) {
-      console.error('Error creating cliente:', error)
-      console.log('Erro ao criar cliente. Tente novamente.')
-    } finally {
+          } catch (err) {
+        console.error('Error creating cliente:', err)
+        error("Erro ao Criar Cliente", "Não foi possível criar o cliente. Tente novamente.")
+      } finally {
       setLoading(false)
     }
   }
