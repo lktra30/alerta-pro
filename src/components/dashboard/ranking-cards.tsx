@@ -70,13 +70,24 @@ export function RankingCards() {
       const sdrsData = colaboradores
         .filter(c => c.funcao.toLowerCase() === 'sdr')
         .map(colaborador => {
+          const clientesSDR = todosClientes.filter(c => c.sdr_id === colaborador.id)
+          
+          // Contar reuniões realizadas pelos clientes
+          const reunioesRealizadas = clientesSDR.filter(c => 
+            ['Reunioes Feitas', 'Vendas Realizadas'].includes(c.etapa)
+          ).length
+          
+          // Reuniões na tabela
           const reunioesColaborador = reunioesValidas.filter(r => r.sdr_id === colaborador.id)
-          const reunioesQualificadas = reunioesColaborador.filter(r => r.tipo === 'qualificada').length
+          const reunioesQualificadasTabela = reunioesColaborador.filter(r => r.tipo === 'qualificada').length
           const reunioesGeraramVenda = reunioesColaborador.filter(r => r.tipo === 'gerou_venda').length
+          const reunioesNaTabela = reunioesQualificadasTabela + reunioesGeraramVenda
+          
+          // Total de reuniões = MAX entre reuniões na tabela e reuniões realizadas
+          const reunioesQualificadas = Math.max(reunioesNaTabela, reunioesRealizadas)
           
           const metaReunioesSDR = metaAtual?.meta_reunioes_sdr || 50
-          const totalReunioes = reunioesQualificadas + reunioesGeraramVenda
-          const percentualMeta = (totalReunioes / metaReunioesSDR) * 100
+          const percentualMeta = (reunioesQualificadas / metaReunioesSDR) * 100
           
           const stats = calculateComissaoSDR(
             reunioesQualificadas,

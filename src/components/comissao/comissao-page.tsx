@@ -148,6 +148,13 @@ export function ComissaoPage() {
       let tipo: 'sdr' | 'closer' = 'sdr'
 
       if (colaborador.funcao.toLowerCase() === 'sdr') {
+        const clientesSDR = clientesFiltrados.filter(c => c.sdr_id === colaborador.id)
+        
+        // Contar reuniões realizadas pelos clientes
+        const reunioesRealizadas = clientesSDR.filter(c => 
+          ['Reunioes Feitas', 'Vendas Realizadas'].includes(c.etapa)
+        ).length
+        
         // Para SDR: calcular baseado em reuniões filtradas APENAS de clientes em etapas válidas
         const reunioesSDR = reunioesFiltradas.filter(r => {
           if (r.sdr_id !== colaborador.id) return false
@@ -159,7 +166,11 @@ export function ComissaoPage() {
           }
           return false
         })
-        percentualMeta = (reunioesSDR.length / metas.meta_sdr) * 100
+        const reunioesNaTabela = reunioesSDR.length
+        
+        // Total de reuniões = MAX entre reuniões na tabela e reuniões realizadas
+        const totalReunioes = Math.max(reunioesNaTabela, reunioesRealizadas)
+        percentualMeta = (totalReunioes / metas.meta_sdr) * 100
         
         comissao = await calculateComissaoSDRFromClientes(
           clientesFiltrados,
@@ -261,7 +272,14 @@ export function ComissaoPage() {
 
   const getMetaInfo = (colaborador: ComissaoData) => {
     if (colaborador.tipo === 'sdr') {
-      // Agendadas = reuniões na tabela reunioes APENAS de clientes em etapas válidas
+      const clientesSDR = clientes.filter(c => c.sdr_id === colaborador.colaborador.id)
+      
+      // Realizadas = clientes com etapa "Reunioes Feitas" ou "Vendas Realizadas"
+      const realizadas = clientesSDR.filter(c => 
+        c.etapa === 'Reunioes Feitas' || c.etapa === 'Vendas Realizadas'
+      ).length
+      
+      // Reuniões na tabela reunioes APENAS de clientes em etapas válidas
       const reunioesSDR = reunioesFiltradas.filter(r => {
         if (r.sdr_id !== colaborador.colaborador.id) return false
         
@@ -272,13 +290,11 @@ export function ComissaoPage() {
         }
         return false
       })
-      const agendadas = reunioesSDR.length
+      const reunioesNaTabela = reunioesSDR.length
       
-      // Realizadas = clientes com etapa "Reunioes Feitas" ou "Vendas Realizadas"
-      const clientesSDR = clientes.filter(c => c.sdr_id === colaborador.colaborador.id)
-      const realizadas = clientesSDR.filter(c => 
-        c.etapa === 'Reunioes Feitas' || c.etapa === 'Vendas Realizadas'
-      ).length
+      // Agendadas = MAX entre reuniões na tabela e reuniões realizadas
+      // Isso garante que toda reunião realizada também conte como agendada
+      const agendadas = Math.max(reunioesNaTabela, realizadas)
       
       // Gerou venda = clientes com "Vendas Realizadas" + valor preenchido
       const gerouVenda = clientesSDR.filter(c => 

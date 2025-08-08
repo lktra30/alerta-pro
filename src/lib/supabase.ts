@@ -1760,7 +1760,25 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
       }))
     }
     
-    const totalReunioesMarcadas = reunioesFiltradas.length
+    // Contar reuniões realizadas pelos clientes no período (para garantir que realizadas também contem como marcadas)
+    let clientesFiltrados = clientes.data || []
+    if (dataInicio) {
+      clientesFiltrados = clientesFiltrados.filter(c => {
+        if (!c.criado_em) return false
+        const clienteDate = c.criado_em
+        if (dataFim) {
+          return clienteDate >= dataInicio && clienteDate < dataFim
+        }
+        return clienteDate >= dataInicio
+      })
+    }
+    
+    const reunioesRealizadasPorClientes = clientesFiltrados.filter(c => 
+      ['Reunioes Feitas', 'Vendas Realizadas'].includes(c.etapa)
+    ).length
+    
+    // Total de reuniões marcadas = MAX entre reuniões na tabela e reuniões realizadas pelos clientes
+    const totalReunioesMarcadas = Math.max(reunioesFiltradas.length, reunioesRealizadasPorClientes)
     
     const currentDate = new Date()
     const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)

@@ -281,6 +281,13 @@ export async function calculateComissaoSDRFromClientes(
   percentualMeta: number,
   config: ComissaoSDRConfig
 ): Promise<ComissaoSDRResult> {
+  const clientesSDR = clientes.filter(cliente => cliente.sdr_id === sdrId)
+  
+  // Contar reuniões realizadas (clientes em etapas válidas)
+  const reunioesRealizadas = clientesSDR.filter(cliente => 
+    ['Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+  ).length
+  
   // Filtrar reuniões do SDR APENAS de clientes em etapas válidas
   const reunioesSDR = reunioes.filter(reuniao => {
     if (reuniao.sdr_id !== sdrId) return false
@@ -292,12 +299,13 @@ export async function calculateComissaoSDRFromClientes(
     }
     return false
   })
+  const reunioesNaTabela = reunioesSDR.length
   
-  // Contar reuniões qualificadas (apenas reuniões válidas do SDR)
-  const reunioesQualificadas = reunioesSDR.length
+  // Reuniões qualificadas = MAX entre reuniões na tabela e reuniões realizadas
+  // Isso garante que toda reunião realizada também conte como qualificada
+  const reunioesQualificadas = Math.max(reunioesNaTabela, reunioesRealizadas)
   
   // Contar reuniões que geraram venda (clientes com etapa "Vendas Realizadas" e valor_venda preenchido)
-  const clientesSDR = clientes.filter(cliente => cliente.sdr_id === sdrId)
   const reunioesGeraramVenda = clientesSDR.filter(cliente => 
     cliente.etapa === 'Vendas Realizadas' && 
     cliente.valor_venda && 
