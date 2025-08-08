@@ -459,7 +459,50 @@ export function DashboardContent() {
         </div>
       </div>
 
-      {/* Top Performers and Daily Progress - Responsivo */}
+      {/* Progress Indicators - Responsivo */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-base sm:text-lg">Progresso da Meta Comercial</CardTitle>
+            <CardDescription className="text-sm">
+              R$ {stats.totalMRR.toLocaleString('pt-BR')} de R$ {stats.metaMensal.toLocaleString('pt-BR')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium truncate">Meta Mensal (MRR)</p>
+                  <Badge variant="secondary" className="flex-shrink-0">{((stats.totalMRR / stats.metaMensal) * 100).toFixed(2)}%</Badge>  
+                </div>
+                <Progress value={(stats.totalMRR / stats.metaMensal) * 100} className="h-3" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-base sm:text-lg">Progresso de Reuniões Marcadas</CardTitle>
+            <CardDescription className="text-sm">
+              {stats.totalReunioesMarcadas} de {stats.metaReunioesSdr} reuniões
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium truncate">Meta Mensal SDR</p>
+                  <Badge variant="secondary" className="flex-shrink-0">{((stats.totalReunioesMarcadas / stats.metaReunioesSdr) * 100).toFixed(1)}%</Badge>  
+                </div>
+                <Progress value={(stats.totalReunioesMarcadas / stats.metaReunioesSdr) * 100} className="h-3" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Performers - Responsivo */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Top Closer */}
         <Card className="overflow-hidden">
@@ -551,25 +594,27 @@ export function DashboardContent() {
                 <div className="text-sm text-muted-foreground">Carregando rankings...</div>
               </div>
             ) : topSDRs.length > 0 ? (
-              <div className="flex items-start space-x-3">
-                <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 font-semibold flex-shrink-0">
-                  🏆
-                </div>
-                <div className="flex-1 space-y-1 min-w-0">
-                  <p className="text-base sm:text-lg font-semibold truncate">{topSDRs[0].nome}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">SDR líder em reuniões marcadas</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-lg sm:text-xl font-bold text-orange-600 truncate">
-                      {topSDRs[0].totalReunioes} reuniões
-                    </span>
-                    <Badge variant="secondary" className="text-xs bg-orange-500/10 text-orange-500 flex-shrink-0">
-                      {topSDRs[0].percentualReunioes.toFixed(1)}%
-                    </Badge>
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 font-semibold flex-shrink-0">
+                    🎯
                   </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                    {topSDRs[0].vendasGeradas} vendas • MRR: {formatCurrency(topSDRs[0].totalMRRGerado)}
-                  </p>
-                  <p className="text-xs text-orange-600">das reuniões totais</p>
+                  <div className="flex-1 space-y-1 min-w-0">
+                    <p className="text-base sm:text-lg font-semibold truncate">{topSDRs[0].nome}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">SDR líder em reuniões marcadas</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-lg sm:text-xl font-bold text-orange-600 truncate">
+                        {topSDRs[0].totalReunioes} reuniões
+                      </span>
+                      <Badge variant="secondary" className="text-xs bg-orange-500/10 text-orange-500 flex-shrink-0">
+                        {topSDRs[0].percentualReunioes.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                      {topSDRs[0].vendasGeradas} vendas • MRR: {formatCurrency(topSDRs[0].totalMRRGerado)}
+                    </p>
+                    <p className="text-xs text-orange-600">das reuniões totais</p>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -579,49 +624,6 @@ export function DashboardContent() {
                 <p className="text-xs text-muted-foreground">Aguardando primeiras reuniões...</p>
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Progress Indicators - Responsivo */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Progresso da Meta Comercial</CardTitle>
-            <CardDescription className="text-sm">
-              R$ {stats.totalMRR.toLocaleString('pt-BR')} de R$ {stats.metaMensal.toLocaleString('pt-BR')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium truncate">Meta Mensal (MRR)</p>
-                  <Badge variant="secondary" className="flex-shrink-0">{((stats.totalMRR / stats.metaMensal) * 100).toFixed(2)}%</Badge>  
-                </div>
-                <Progress value={(stats.totalMRR / stats.metaMensal) * 100} className="h-3" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Progresso de Reuniões Marcadas</CardTitle>
-            <CardDescription className="text-sm">
-              {stats.totalReunioesMarcadas} de {stats.metaReunioesSdr} reuniões
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium truncate">Meta Mensal SDR</p>
-                  <Badge variant="secondary" className="flex-shrink-0">{((stats.totalReunioesMarcadas / stats.metaReunioesSdr) * 100).toFixed(1)}%</Badge>  
-                </div>
-                <Progress value={(stats.totalReunioesMarcadas / stats.metaReunioesSdr) * 100} className="h-3" />
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
