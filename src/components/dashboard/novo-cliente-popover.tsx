@@ -19,6 +19,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Save, X, Loader2 } from "lucide-react"
 import { createCliente, isSupabaseConfigured } from "@/lib/supabase"
+// Removido: imports de validação não utilizados
 import type { EtapaEnum } from "@/types/database"
 
 interface NovoClienteForm {
@@ -117,7 +118,7 @@ export function NovoClientePopover() {
   const handleSave = async () => {
     // Basic validation
     if (!form.nome.trim()) {
-      alert('Nome é obrigatório')
+      // REMOVIDO: alert - usar validação silenciosa
       return
     }
 
@@ -129,6 +130,15 @@ export function NovoClientePopover() {
     if (!form.closer_id.trim()) {
       alert('Closer é obrigatório')
       return
+    }
+
+    // VALIDAÇÃO ESPECIAL: Se tentando criar como "Vendas Realizadas", verificar dados obrigatórios
+    if (form.etapa === 'Vendas Realizadas') {
+      // Neste popover só temos valor_venda, então validar apenas ele
+      if (!form.valor_venda || Number(form.valor_venda) <= 0) {
+        console.log('Validation: Para marcar como "Vendas Realizadas", é obrigatório preencher o Valor da Venda.')
+        return
+      }
     }
 
     setLoading(true)
@@ -163,7 +173,7 @@ export function NovoClientePopover() {
       }
 
       console.log('Cliente criado com sucesso:', result.data)
-      alert('Cliente criado com sucesso!')
+              console.log('Cliente criado com sucesso!')
       resetForm()
       setOpen(false)
 
@@ -172,7 +182,7 @@ export function NovoClientePopover() {
 
     } catch (error) {
       console.error('Erro ao salvar cliente:', error)
-      alert('Erro ao salvar cliente. Verifique a conexão com o banco.')
+              console.log('Erro ao salvar cliente. Verifique a conexão com o banco.')
     } finally {
       setLoading(false)
     }

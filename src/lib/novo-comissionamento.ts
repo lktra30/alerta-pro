@@ -281,10 +281,19 @@ export async function calculateComissaoSDRFromClientes(
   percentualMeta: number,
   config: ComissaoSDRConfig
 ): Promise<ComissaoSDRResult> {
-  // Filtrar reuniões do SDR
-  const reunioesSDR = reunioes.filter(reuniao => reuniao.sdr_id === sdrId)
+  // Filtrar reuniões do SDR APENAS de clientes em etapas válidas
+  const reunioesSDR = reunioes.filter(reuniao => {
+    if (reuniao.sdr_id !== sdrId) return false
+    
+    // Verificar se cliente está em etapa válida
+    if (reuniao.cliente_id) {
+      const cliente = clientes.find(c => c.id === reuniao.cliente_id)
+      return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+    }
+    return false
+  })
   
-  // Contar reuniões qualificadas (todas as reuniões do SDR)
+  // Contar reuniões qualificadas (apenas reuniões válidas do SDR)
   const reunioesQualificadas = reunioesSDR.length
   
   // Contar reuniões que geraram venda (clientes com etapa "Vendas Realizadas" e valor_venda preenchido)

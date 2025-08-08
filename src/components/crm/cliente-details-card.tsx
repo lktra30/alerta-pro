@@ -21,6 +21,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Eye, Edit, Save, X, Loader2, User, Mail, Phone, Building, MapPin, DollarSign } from "lucide-react"
 import { updateCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
+import { validateVendaRealizadaData, isVendaRealizadaDataComplete } from "@/lib/validations"
+import { Toast } from "@/components/ui/toast"
 import { Cliente, EtapaEnum, Colaborador } from "@/types/database"
 
 interface ClienteForm {
@@ -105,6 +107,8 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
   const [loading, setLoading] = useState(false)
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [planos, setPlanos] = useState<Plano[]>([])
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
   const [form, setForm] = useState<ClienteForm>({
     nome: '',
     email: '',
@@ -139,8 +143,24 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         valor_base_plano: cliente.valor_base_plano || '',
         usar_valor_base_para_venda: cliente.valor_venda === cliente.valor_base_plano
       })
+      
+      // DETECTAR VENDAS REALIZADAS AQUI, APÓS ATUALIZAR O FORM
+      if (isOpen && cliente.etapa === 'Vendas Realizadas') {
+        const hasCompleteData = isVendaRealizadaDataComplete({
+          valor_venda: cliente.valor_venda,
+          tipo_plano: cliente.tipo_plano,
+          valor_base_plano: cliente.valor_base_plano
+        })
+        
+        if (!hasCompleteData) {
+          // Ativar modo edição automaticamente
+          setIsEditing(true)
+          setToastMessage("Para finalizar como 'Vendas Realizadas', preencha os dados obrigatórios")
+          setShowToast(true)
+        }
+      }
     }
-  }, [cliente])
+  }, [cliente, isOpen])
 
   // Load colaboradores and planos when component mounts
   useEffect(() => {
@@ -154,6 +174,13 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     }
     loadData()
   }, [])
+
+  // Limpar toast quando modal fecha
+  useEffect(() => {
+    if (!isOpen) {
+      setShowToast(false)
+    }
+  }, [isOpen])
 
   const handleInputChange = (field: keyof ClienteForm, value: string | number | boolean) => {
     setForm(prev => {
@@ -203,7 +230,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
   // Validação antes de salvar
   const validateForm = () => {
     if (!form.nome.trim()) {
-      alert('Nome é obrigatório')
+      // REMOVIDO: alert - usar validação silenciosa
       return false
     }
 
@@ -218,7 +245,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         return false
       }
       if (!form.valor_base_plano || parseFloat(form.valor_base_plano.toString()) <= 0) {
-        alert('Valor base do plano é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de valor base
         return false
       }
       if (!form.closer_id) {
@@ -252,10 +279,56 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
     }).format(value)
   }
 
+  // Verificar se botão salvar deve estar habilitado
+  const isSaveButtonEnabled = () => {
+    if (!validateForm()) return false
+    
+    // Se etapa é "Vendas Realizadas", verificar dados obrigatórios
+    if (form.etapa === 'Vendas Realizadas') {
+      return isVendaRealizadaDataComplete({
+        valor_venda: form.valor_venda,
+        tipo_plano: form.tipo_plano,
+        valor_base_plano: form.valor_base_plano
+      })
+    }
+    
+    return true
+  }
+
+  // Função para lidar com clique no botão salvar desabilitado
+  const handleDisabledSaveClick = () => {
+    if (form.etapa === 'Vendas Realizadas') {
+      const validation = validateVendaRealizadaData({
+        valor_venda: form.valor_venda,
+        tipo_plano: form.tipo_plano,
+        valor_base_plano: form.valor_base_plano
+      })
+      
+      setToastMessage(`Dados obrigatórios:\n• ${validation.missingFields.join('\n• ')}`)
+      setShowToast(true)
+    }
+  }
+
   const handleSave = async () => {
     if (!validateForm()) {
       return
     }
+
+          // VALIDAÇÃO ESPECIAL: Se tentando marcar como "Vendas Realizadas", verificar dados obrigatórios
+      if (form.etapa === 'Vendas Realizadas') {
+        const validation = validateVendaRealizadaData({
+          valor_venda: form.valor_venda,
+          tipo_plano: form.tipo_plano,
+          valor_base_plano: form.valor_base_plano
+        })
+        
+        if (!validation.isValid) {
+          // REMOVIDO: showValidationAlert - usar Toast interno do modal
+          setToastMessage(`Dados obrigatórios:\n• ${validation.missingFields.join('\n• ')}`)
+          setShowToast(true)
+          return
+        }
+      }
 
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured. Cannot save changes.')
@@ -282,9 +355,25 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         valor_base_plano: form.valor_base_plano ? parseFloat(form.valor_base_plano.toString()) : null
       }
 
-      // Se etapa é "Vendas Realizadas" e tem valor, preencher data de fechamento
+      // LÓGICA DE FECHAMENTO E LIMPEZA
       if (form.etapa === 'Vendas Realizadas' && form.valor_venda) {
+        // Se etapa é "Vendas Realizadas" e tem valor, preencher data de fechamento
         updateData.data_fechamento = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+      } else if (cliente.etapa === 'Vendas Realizadas' && form.etapa !== 'Vendas Realizadas') {
+        // Se estava em "Vendas Realizadas" e está saindo, limpar dados de fechamento
+        console.log(`Cliente ${cliente.id}: Saindo de "Vendas Realizadas" para "${form.etapa}" - Limpando dados de fechamento`)
+        updateData.valor_venda = null
+        updateData.data_fechamento = null
+        updateData.tipo_plano = null
+        updateData.valor_base_plano = null
+        
+        // Atualizar formulário local também
+        setForm(prev => ({
+          ...prev,
+          valor_venda: '',
+          tipo_plano: '',
+          valor_base_plano: ''
+        }))
       }
 
       const updatedCliente = await updateCliente(cliente.id, updateData)
@@ -293,13 +382,13 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         console.log('Cliente updated successfully:', updatedCliente)
         setIsEditing(false)
         onClienteUpdated?.()
-        alert('Cliente atualizado com sucesso!')
+        console.log('Cliente atualizado com sucesso!')
       } else {
         throw new Error('Failed to update cliente')
       }
     } catch (error) {
       console.error('Error updating cliente:', error)
-      alert('Erro ao atualizar cliente. Tente novamente.')
+      console.log('Erro ao atualizar cliente. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -334,6 +423,7 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
   const closerColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -374,7 +464,12 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
                     <X className="h-4 w-4 mr-2" />
                     Cancelar
                   </Button>
-                  <Button onClick={handleSave} disabled={loading} className="flex-1 sm:flex-none">
+                  <Button 
+                    onClick={isSaveButtonEnabled() ? handleSave : handleDisabledSaveClick} 
+                    disabled={loading || !isSaveButtonEnabled()} 
+                    className="flex-1 sm:flex-none"
+                    variant={!isSaveButtonEnabled() ? "secondary" : "default"}
+                  >
                     {loading ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
@@ -550,15 +645,16 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
                       id="valor_base_plano"
                       type="number"
                       value={form.valor_base_plano || ''}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        handleInputChange('valor_base_plano', value ? parseFloat(value) : '')
-                      }}
                       placeholder="0,00"
                       min="0"
                       step="0.01"
                       disabled={loading}
+                      readOnly
+                      className="bg-muted cursor-not-allowed"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Valor preenchido automaticamente baseado no tipo do plano selecionado
+                    </p>
                   </div>
 
                   <div className="md:col-span-2 space-y-3">
@@ -695,5 +791,15 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         </div>
       </DialogContent>
     </Dialog>
+    
+    {/* Toast de notificação */}
+    <Toast
+      title="Dados Obrigatórios"
+      description={toastMessage}
+      variant="destructive"
+      open={showToast}
+      onOpenChange={setShowToast}
+    />
+    </>
   )
 }

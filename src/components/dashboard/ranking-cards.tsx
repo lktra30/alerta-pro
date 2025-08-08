@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Trophy, Target } from "lucide-react"
-import { getNovoComissionamentoStats, getMetasIndividuais } from "@/lib/supabase"
+import { getNovoComissionamentoStats, getMetasIndividuais, getClientes } from "@/lib/supabase"
 import { 
   getNovaComissaoConfig, 
   calculateComissaoSDR, 
@@ -40,9 +40,10 @@ export function RankingCards() {
 
   const loadRankingData = async () => {
     try {
-      const [comissionamentoData, metasIndividuaisData] = await Promise.all([
+      const [comissionamentoData, metasIndividuaisData, todosClientes] = await Promise.all([
         getNovoComissionamentoStats(),
-        getMetasIndividuais()
+        getMetasIndividuais(),
+        getClientes() // Buscar todos os clientes para validar etapas
       ])
       
       setMetasIndividuais({
@@ -55,6 +56,13 @@ export function RankingCards() {
       const config = getNovaComissaoConfig()
       const { colaboradores, reunioes, vendas, metas } = comissionamentoData
       
+      // FILTRAR reuniões apenas de clientes em etapas válidas
+      const reunioesValidas = reunioes.filter(reuniao => {
+        if (!reuniao.cliente_id) return false
+        const cliente = todosClientes.find(c => c.id === reuniao.cliente_id)
+        return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+      })
+      
       // Meta atual (assumindo que queremos a mais recente)
       const metaAtual = metas[0]
       
@@ -62,7 +70,7 @@ export function RankingCards() {
       const sdrsData = colaboradores
         .filter(c => c.funcao.toLowerCase() === 'sdr')
         .map(colaborador => {
-          const reunioesColaborador = reunioes.filter(r => r.sdr_id === colaborador.id)
+          const reunioesColaborador = reunioesValidas.filter(r => r.sdr_id === colaborador.id)
           const reunioesQualificadas = reunioesColaborador.filter(r => r.tipo === 'qualificada').length
           const reunioesGeraramVenda = reunioesColaborador.filter(r => r.tipo === 'gerou_venda').length
           

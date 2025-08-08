@@ -134,9 +134,42 @@ export async function updateClienteEtapa(id: number, etapa: Database['public']['
     return null
   }
 
+  // Primeiro, buscar os dados atuais do cliente
+  const { data: clienteAtual, error: fetchError } = await supabase
+    .from('clientes')
+    .select('etapa, valor_venda, data_fechamento, tipo_plano, valor_base_plano')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) {
+    console.error('Error fetching current client data:', fetchError)
+    return null
+  }
+
+  // Preparar dados de atualização
+  const updateData: any = { etapa }
+
+  // Se está tentando marcar como "Vendas Realizadas", validar dados obrigatórios
+  if (etapa === 'Vendas Realizadas') {
+    if (!clienteAtual.valor_venda || clienteAtual.valor_venda <= 0 || 
+        !clienteAtual.tipo_plano || !clienteAtual.valor_base_plano || clienteAtual.valor_base_plano <= 0) {
+      console.error(`Cliente ${id}: Tentativa de marcar como "Vendas Realizadas" sem dados obrigatórios preenchidos`)
+      return null // Não permitir a mudança
+    }
+  }
+
+  // Se estava em "Vendas Realizadas" e está saindo para outra etapa, limpar dados de fechamento
+  if (clienteAtual.etapa === 'Vendas Realizadas' && etapa !== 'Vendas Realizadas') {
+    console.log(`Cliente ${id}: Saindo de "Vendas Realizadas" para "${etapa}" - Limpando dados de fechamento`)
+    updateData.valor_venda = null
+    updateData.data_fechamento = null
+    updateData.tipo_plano = null
+    updateData.valor_base_plano = null
+  }
+
   const { data, error } = await supabase
     .from('clientes')
-    .update({ etapa })
+    .update(updateData)
     .eq('id', id)
     .select()
   
@@ -511,12 +544,8 @@ export async function getFunnelData(startDate?: string, endDate?: string) {
       } else if (cliente.etapa === 'Agendados') {
         stageCounts['Agendados']++
       } else if (cliente.etapa === 'Reunioes Feitas') {
-        // Se tem valor de venda, é venda realizada, senão é reunião sem fechamento
-        if (cliente.valor_venda && cliente.valor_venda > 0) {
-          stageCounts['Vendas Realizadas']++
-        } else {
-          stageCounts['Reunioes sem Fechamento']++
-        }
+        // Reuniões feitas sempre contam como reuniões feitas, não vendas
+        stageCounts['Reunioes Feitas']++
       } else if (cliente.etapa === 'Vendas Realizadas') {
         stageCounts['Vendas Realizadas']++
       }
@@ -1376,6 +1405,7 @@ export async function getVendasComPlanos() {
   const { data, error } = await supabase
     .from('clientes')
     .select('id, closer_id, valor_venda, valor_base_plano, tipo_plano, data_fechamento, criado_em')
+    .eq('etapa', 'Vendas Realizadas')
     .not('valor_venda', 'is', null)
     .not('closer_id', 'is', null)
     .not('data_fechamento', 'is', null)
@@ -1470,6 +1500,7 @@ export async function getMRREvolution() {
     const { data: vendas, error } = await supabase
       .from('clientes')
       .select('valor_venda, tipo_plano, data_fechamento')
+      .eq('etapa', 'Vendas Realizadas')
       .not('valor_venda', 'is', null)
       .not('data_fechamento', 'is', null)
       .order('data_fechamento', { ascending: true })
@@ -1616,10 +1647,9 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
     const metas = metasResult
     const reunioes = reunioesResult
 
-    // Filtrar vendas - considerar tanto por data_fechamento quanto por etapa
+    // Filtrar vendas - APENAS clientes na etapa "Vendas Realizadas" com valor
     const vendas = clientes.data?.filter(c => 
-      (c.data_fechamento && c.valor_venda) || 
-      (c.etapa === 'Vendas Realizadas' && c.valor_venda)
+      c.etapa === 'Vendas Realizadas' && c.valor_venda && c.valor_venda > 0
     ) || []
     
     // Criar reuniões automaticamente para vendas que têm SDR mas não têm reunião
@@ -1656,7 +1686,7 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
     const planosSemestrais = vendas.filter(v => v.tipo_plano === 'semestral').length
     const planosAnuais = vendas.filter(v => v.tipo_plano === 'anual').length
     
-    // Contar reuniões marcadas do período
+    // Contar reuniões marcadas do período - APENAS de clientes em etapas válidas
     let reunioesFiltradas = reunioes.data || []
     if (dataInicio) {
       reunioesFiltradas = reunioesFiltradas.filter(r => {
@@ -1669,9 +1699,22 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
       })
     }
     
-    // Se não há reuniões registradas, mas há vendas, considerar cada venda como uma reunião que gerou resultado
+    // FILTRO IMPORTANTE: Só contar reuniões de clientes que estão em etapas válidas
+    if (reunioesFiltradas.length > 0) {
+      reunioesFiltradas = reunioesFiltradas.filter(reuniao => {
+        if (!reuniao.cliente_id) return false
+        
+        // Buscar o cliente associado à reunião
+        const cliente = clientes.data?.find(c => c.id === reuniao.cliente_id)
+        
+        // Só contar se cliente existe E está em etapa válida para reuniões
+        return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+      })
+    }
+    
+    // Se não há reuniões registradas válidas, mas há vendas, considerar cada venda como uma reunião que gerou resultado
     if (reunioesFiltradas.length === 0 && vendas.length > 0) {
-      console.log('Não há reuniões registradas, mas há vendas. Considerando vendas como reuniões.')
+      console.log('Não há reuniões registradas válidas, mas há vendas. Considerando vendas como reuniões.')
       reunioesFiltradas = vendas.map((venda, index) => ({
         id: `venda_${venda.id}`,
         sdr_id: venda.sdr_id,
@@ -1928,6 +1971,7 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
     let vendasQuery = supabase
       .from('clientes')
       .select('*')
+      .eq('etapa', 'Vendas Realizadas')
       .not('data_fechamento', 'is', null)
       .not('valor_venda', 'is', null)
       .not('closer_id', 'is', null)
@@ -2092,10 +2136,18 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
     
     const { data: vendas, error: vendasError } = await vendasQuery
 
-
-
     if (vendasError) {
       console.error('Error fetching vendas for SDR:', vendasError)
+      return []
+    }
+
+    // Buscar TODOS os clientes para verificar etapas atuais das reuniões
+    const { data: todosClientes, error: clientesError } = await supabase
+      .from('clientes')
+      .select('id, etapa')
+
+    if (clientesError) {
+      console.error('Error fetching clientes for SDR validation:', clientesError)
       return []
     }
 
@@ -2117,10 +2169,19 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
       vendas: Array<{ valor: number; valorBase: number; tipo: string }>
     }>()
 
-    // Processar reuniões
+    // Processar reuniões - APENAS de clientes em etapas válidas
     reunioes.forEach((reuniao: any) => {
       const colaborador = colaboradoresMap.get(reuniao.sdr_id)
       if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+        // VERIFICAR SE CLIENTE ESTÁ EM ETAPA VÁLIDA
+        if (reuniao.cliente_id) {
+          const cliente = todosClientes?.find(c => c.id === reuniao.cliente_id)
+          // Só contar se cliente existe E está em etapa válida para reuniões
+          if (!cliente || !['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)) {
+            return // Pular esta reunião
+          }
+        }
+        
         const sdrId = reuniao.sdr_id
         if (!sdrsMap.has(sdrId)) {
           sdrsMap.set(sdrId, {
@@ -2162,8 +2223,13 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
       })
     }
 
-    // Calcular estatísticas
-    const totalReunioes = reunioes.length
+    // Calcular estatísticas - APENAS reuniões válidas
+    const reunioesValidas = reunioes.filter(reuniao => {
+      if (!reuniao.cliente_id) return false
+      const cliente = todosClientes?.find(c => c.id === reuniao.cliente_id)
+      return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+    })
+    const totalReunioes = reunioesValidas.length
     
     const topSDRs: TopSDR[] = Array.from(sdrsMap.values()).map(sdr => {
       const reunioesQualificadas = sdr.reunioes.filter(r => r.tipo === 'qualificada').length
@@ -2509,3 +2575,5 @@ export async function getMetaAdsRealStats(startDate?: string, endDate?: string) 
     }
   }
 }
+
+

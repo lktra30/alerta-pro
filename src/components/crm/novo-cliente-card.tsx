@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Save, X, Loader2 } from "lucide-react"
 import { createCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
+import { validateVendaRealizadaData } from "@/lib/validations"
 import type { EtapaEnum, Colaborador } from "@/types/database"
 
 interface NovoClienteForm {
@@ -155,7 +156,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
   // Validação antes de salvar
   const validateForm = () => {
     if (!form.nome.trim()) {
-      alert('Nome é obrigatório')
+      // REMOVIDO: alert - usar validação silenciosa
       return false
     }
 
@@ -170,7 +171,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         return false
       }
       if (!form.valor_base_plano || parseFloat(form.valor_base_plano.toString()) <= 0) {
-        alert('Valor base do plano é obrigatório para vendas realizadas')
+        // REMOVIDO: alert de valor base
         return false
       }
       if (!form.closer_id) {
@@ -220,6 +221,21 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
       return
     }
 
+    // VALIDAÇÃO ESPECIAL: Se tentando criar como "Vendas Realizadas", verificar dados obrigatórios
+    if (form.etapa === 'Vendas Realizadas') {
+      const validation = validateVendaRealizadaData({
+        valor_venda: form.valor_venda,
+        tipo_plano: form.tipo_plano,
+        valor_base_plano: form.valor_base_plano
+      })
+      
+              if (!validation.isValid) {
+          // REMOVIDO: showValidationAlert - usar console.log por enquanto
+          console.log('Validation failed:', validation.message)
+          return
+        }
+    }
+
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured. Cannot save changes.')
       alert('Configuração do banco de dados não encontrada. Não é possível salvar as alterações.')
@@ -257,13 +273,13 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         resetForm()
         onClienteAdicionado?.()
         onOpenChange(false)
-        alert('Cliente criado com sucesso!')
+        console.log('Cliente criado com sucesso!')
       } else {
         throw new Error('Failed to create cliente')
       }
     } catch (error) {
       console.error('Error creating cliente:', error)
-      alert('Erro ao criar cliente. Tente novamente.')
+      console.log('Erro ao criar cliente. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -454,15 +470,16 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
                   id="valor_base_plano"
                   type="number"
                   value={form.valor_base_plano || ''}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    handleInputChange('valor_base_plano', value ? parseFloat(value) : '')
-                  }}
                   placeholder="0,00"
                   min="0"
                   step="0.01"
                   disabled={loading}
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Valor preenchido automaticamente baseado no tipo do plano selecionado
+                </p>
               </div>
 
               <div className="md:col-span-2 space-y-3">

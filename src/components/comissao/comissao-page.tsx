@@ -148,8 +148,17 @@ export function ComissaoPage() {
       let tipo: 'sdr' | 'closer' = 'sdr'
 
       if (colaborador.funcao.toLowerCase() === 'sdr') {
-        // Para SDR: calcular baseado em reuniões filtradas
-        const reunioesSDR = reunioesFiltradas.filter(r => r.sdr_id === colaborador.id)
+        // Para SDR: calcular baseado em reuniões filtradas APENAS de clientes em etapas válidas
+        const reunioesSDR = reunioesFiltradas.filter(r => {
+          if (r.sdr_id !== colaborador.id) return false
+          
+          // Verificar se cliente está em etapa válida
+          if (r.cliente_id) {
+            const cliente = clientesFiltrados.find(c => c.id === r.cliente_id)
+            return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+          }
+          return false
+        })
         percentualMeta = (reunioesSDR.length / metas.meta_sdr) * 100
         
         comissao = await calculateComissaoSDRFromClientes(
@@ -252,8 +261,17 @@ export function ComissaoPage() {
 
   const getMetaInfo = (colaborador: ComissaoData) => {
     if (colaborador.tipo === 'sdr') {
-      // Agendadas = reuniões na tabela reunioes
-      const reunioesSDR = reunioesFiltradas.filter(r => r.sdr_id === colaborador.colaborador.id)
+      // Agendadas = reuniões na tabela reunioes APENAS de clientes em etapas válidas
+      const reunioesSDR = reunioesFiltradas.filter(r => {
+        if (r.sdr_id !== colaborador.colaborador.id) return false
+        
+        // Verificar se cliente associado está em etapa válida
+        if (r.cliente_id) {
+          const cliente = clientes.find(c => c.id === r.cliente_id)
+          return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
+        }
+        return false
+      })
       const agendadas = reunioesSDR.length
       
       // Realizadas = clientes com etapa "Reunioes Feitas" ou "Vendas Realizadas"

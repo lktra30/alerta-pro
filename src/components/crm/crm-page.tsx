@@ -39,6 +39,7 @@ import {
 import type { DateRange } from "react-day-picker"
 import { Cliente, EtapaEnum } from "@/types/database"
 import { getClientes, updateClienteEtapa, isSupabaseConfigured, deleteCliente } from "@/lib/supabase"
+import { isVendaRealizadaDataComplete } from "@/lib/validations"
 import { NovoClienteCard } from "./novo-cliente-card"
 import { ClienteDetailsCard } from "./cliente-details-card"
 import { PeriodoFiltro } from "@/components/ui/date-range-filter"
@@ -182,15 +183,44 @@ export function CRMPage() {
 
   const handleEtapaChange = async (clienteId: number, newEtapa: EtapaEnum) => {
     try {
-      // Update in database
-      await updateClienteEtapa(clienteId, newEtapa)
+      // NOVA UX: Se tentando marcar como "Vendas Realizadas", verificar dados
+      if (newEtapa === 'Vendas Realizadas') {
+        const cliente = clientes.find(c => c.id === clienteId)
+        if (cliente) {
+          const isValid = isVendaRealizadaDataComplete({
+            valor_venda: cliente.valor_venda,
+            tipo_plano: cliente.tipo_plano,
+            valor_base_plano: cliente.valor_base_plano
+          })
+          
+          if (!isValid) {
+            // Abrir modal de edição com etapa pré-selecionada (sem alert)
+            // Abrir modal automaticamente para preencher dados obrigatórios
+            setSelectedCliente({ ...cliente, etapa: newEtapa })
+            setIsDetailsOpen(true)
+            return
+          }
+        }
+      }
       
-      // Update local state
-      setClientes(prev => prev.map(cliente => 
-        cliente.id === clienteId 
-          ? { ...cliente, etapa: newEtapa, atualizado_em: new Date().toISOString() }
-          : cliente
-      ))
+      // Update in database (apenas se validação passou)
+      const updatedCliente = await updateClienteEtapa(clienteId, newEtapa)
+      
+      if (updatedCliente) {
+        // Update local state with the actual data returned from database
+        setClientes(prev => prev.map(cliente => 
+          cliente.id === clienteId 
+            ? { ...cliente, ...updatedCliente, atualizado_em: new Date().toISOString() }
+            : cliente
+        ))
+      } else {
+        // Fallback: apenas atualizar a etapa se não retornou dados completos
+        setClientes(prev => prev.map(cliente => 
+          cliente.id === clienteId 
+            ? { ...cliente, etapa: newEtapa, atualizado_em: new Date().toISOString() }
+            : cliente
+        ))
+      }
     } catch (error) {
       console.error('Error updating client stage:', error)
     }
@@ -251,20 +281,13 @@ export function CRMPage() {
       handleDeleteCliente(clienteId, clienteNome)
     }
 
-    const handleEtapaDrop = async (clienteId: number, newEtapa: EtapaEnum) => {
-      const cliente = filteredClientes.find(c => c.id === clienteId)
-      if (!cliente || cliente.etapa === newEtapa) return
+      const handleEtapaDrop = async (clienteId: number, newEtapa: EtapaEnum) => {
+    const cliente = filteredClientes.find(c => c.id === clienteId)
+    if (!cliente || cliente.etapa === newEtapa) return
 
-      if (newEtapa === 'Vendas Realizadas') {
-        if (!cliente.valor_venda || !cliente.tipo_plano || !cliente.data_fechamento) {
-          setSelectedCliente(cliente)
-          setIsDetailsOpen(true)
-          return
-        }
-      }
-
-      await handleEtapaChange(clienteId, newEtapa)
-    }
+    // Usar a mesma lógica do handleEtapaChange
+    await handleEtapaChange(clienteId, newEtapa)
+  }
 
     // Auto-scroll functionality
     const handleAutoScroll = (e: React.DragEvent) => {
