@@ -7,6 +7,8 @@ import { ThemeToggle } from "./theme-toggle"
 import { EditGoalsModal } from "./edit-goals-modal"
 import { CommissionInfoModal } from "./commission-info-modal"
 import { UserNav } from "@/components/user-nav"
+import Image from "next/image"
+import Link from "next/link"
 import {
   Sheet,
   SheetContent,
@@ -27,7 +29,25 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
     <header className="flex h-14 sm:h-16 items-center justify-between border-b bg-background px-3 sm:px-6">
       {/* Left side */}
       <div className="flex items-center gap-2 sm:gap-4">
-        {/* Espaço reservado para breadcrumbs ou título da página específica no futuro */}
+        {/* Logo - visível apenas em mobile quando sidebar não aparece */}
+        <Link href="/" className="md:hidden flex items-center">
+          <Image
+            src="/304x88-na-cor-preta.png"
+            alt="AlertaPro"
+            width={100}
+            height={29}
+            className="object-contain dark:hidden"
+            priority
+          />
+          <Image
+            src="/304x88-na-cor-branca.png"
+            alt="AlertaPro"
+            width={100}
+            height={29}
+            className="object-contain hidden dark:block"
+            priority
+          />
+        </Link>
       </div>
 
       {/* Right side */}

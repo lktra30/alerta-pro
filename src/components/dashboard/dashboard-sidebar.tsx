@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
+import Image from "next/image"
 
 const sidebarItems = [
   {
@@ -63,16 +64,37 @@ export function DashboardSidebar({ className }: DashboardSidebarProps = {}) {
     >
       {/* Logo/Brand */}
       <div className="flex h-16 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+        <Link href="/" className="flex items-center w-full">
+          {/* Ícone de Dashboard - só aparece quando colapsado */}
+          <div className={cn(
+            "h-8 w-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 transition-all duration-300",
+            isExpanded ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+          )}>
             <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
           </div>
-          <h1 className={cn(
-            "text-lg font-semibold transition-all duration-300",
-            isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none"
+          
+          {/* Logo completa - centralizada quando expandido */}
+          <div className={cn(
+            "flex items-center justify-center w-full transition-all duration-300 overflow-hidden",
+            isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none w-0"
           )}>
-            Dashboard
-          </h1>
+            <Image
+              src="/304x88-na-cor-preta.png"
+              alt="AlertaPro"
+              width={140}
+              height={40}
+              className="object-contain dark:hidden"
+              priority
+            />
+            <Image
+              src="/304x88-na-cor-branca.png"
+              alt="AlertaPro"
+              width={140}
+              height={40}
+              className="object-contain hidden dark:block"
+              priority
+            />
+          </div>
         </Link>
       </div>
 

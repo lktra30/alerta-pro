@@ -5,8 +5,25 @@ import { AuthProvider } from "@/components/auth-provider";
 import { ToastProvider } from "@/components/ui/toast-provider";
 
 export const metadata: Metadata = {
-  title: "Licitamax - Alerta Pro - Dashboard",
-  description: "",
+  title: "AlertaPro - Dashboard de Vendas",
+  description: "Dashboard completo para acompanhamento de vendas, metas e performance comercial.",
+  icons: {
+    icon: [
+      {
+        url: "/favicon.svg",
+        sizes: "32x32",
+        type: "image/svg+xml",
+      },
+      {
+        url: "/favicon.ico",
+        sizes: "32x32",
+        type: "image/x-icon",
+      }
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
