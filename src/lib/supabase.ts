@@ -338,6 +338,43 @@ export async function getDailySales() {
   }
 }
 
+// Get daily meetings data for today
+export async function getDailyMeetings() {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured. Please add environment variables.')
+    return { dailyMeetings: 0, dailyGoal: 0 }
+  }
+
+  try {
+    const today = new Date()
+    const todayString = today.toISOString().split('T')[0]
+
+    // Get all meetings for today
+    const { data: reunioes, error } = await supabase
+      .from('reunioes')
+      .select('*')
+      .eq('data_reuniao', todayString)
+    
+    if (error) {
+      console.error('Error fetching daily meetings:', error)
+      return { dailyMeetings: 0, dailyGoal: 0 }
+    }
+
+    const dailyMeetings = reunioes?.length || 0
+    
+    // Get current month meta SDR to calculate daily goal for meetings
+    const currentMetaSdr = await getCurrentMonthMetaSdr()
+    const currentDate = new Date()
+    const workingDays = getWorkingDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1)
+    const dailyGoal = currentMetaSdr ? currentMetaSdr.valor_meta / workingDays : 0
+
+    return { dailyMeetings, dailyGoal }
+  } catch (error) {
+    console.error('Error in getDailyMeetings:', error)
+    return { dailyMeetings: 0, dailyGoal: 0 }
+  }
+}
+
 // Get monthly sales data for charts
 export async function getMonthlySalesData() {
   if (!isSupabaseConfigured() || !supabase) {
@@ -1736,6 +1773,11 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
     const dailySalesData = await getDailySales()
     const faturamentoDiario = dailySalesData.dailySales
     
+    // Buscar reuniões apenas do dia atual para a meta diária de reuniões
+    const dailyMeetingsData = await getDailyMeetings()
+    const reunioesDiarias = dailyMeetingsData.dailyMeetings
+    const metaDiariaReunioes = metaReunioesSdr / workingDays
+    
     // O investimento total agora virá do estado do componente, não mais de valores fixos aqui.
     // O cálculo será feito no frontend com base nos dados do Meta Ads.
     const totalInvestidoPeriodo = 0 // Será substituído pelo valor real no frontend
@@ -1757,6 +1799,9 @@ export async function getAdvancedDashboardStats(periodo?: string, customStartDat
       clientesAdquiridos: vendas.length,
       totalReunioesMarcadas,
       metaReunioesSdr,
+      metaDiariaReunioes,
+      reunioesDiarias,
+      progressoMetaDiariaReunioes: metaDiariaReunioes > 0 ? (reunioesDiarias / metaDiariaReunioes) * 100 : 0,
       planosMensais,
       planosTrimestrais,
       planosSemestrais,

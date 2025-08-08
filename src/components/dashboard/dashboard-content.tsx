@@ -10,6 +10,9 @@ import {
   Calculator,
   AlertCircle,
   Users,
+  Calendar,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 import { SalesFunnelChart } from "./sales-funnel-chart"
@@ -19,7 +22,7 @@ import { RankingCards } from "./ranking-cards"
 import { MetaAdsPerformanceCards } from "@/components/meta-ads/meta-ads-performance-cards"
 import { MonthlyInvestmentChart } from "@/components/meta-ads/monthly-investment-chart"
 import { MetaAdsService } from "@/lib/meta-ads"
-import { getAdvancedDashboardStats, getTopClosers, getTopSDRs, getMetaAdsRealStats, type TopCloser, type TopSDR } from "@/lib/supabase"
+import { getAdvancedDashboardStats, getTopClosers, getTopSDRs, getMetaAdsRealStats, getDailyMeetings, type TopCloser, type TopSDR } from "@/lib/supabase"
 import type { MetaAdsMetrics, MonthlyInvestment } from "@/types/meta-ads"
 import { PeriodoFiltro } from "@/components/ui/date-range-filter"
 
@@ -37,6 +40,9 @@ interface AdvancedDashboardStats {
   clientesAdquiridos: number
   totalReunioesMarcadas: number
   metaReunioesSdr: number
+  metaDiariaReunioes: number
+  reunioesDiarias: number
+  progressoMetaDiariaReunioes: number
   planosMensais: number
   planosTrimestrais: number
   planosSemestrais: number
@@ -67,6 +73,9 @@ export function DashboardContent() {
     clientesAdquiridos: 0,
     totalReunioesMarcadas: 0,
     metaReunioesSdr: 50,
+    metaDiariaReunioes: 2.38,
+    reunioesDiarias: 0,
+    progressoMetaDiariaReunioes: 0,
     planosMensais: 0,
     planosTrimestrais: 0,
     planosSemestrais: 0,
@@ -83,6 +92,7 @@ export function DashboardContent() {
   
   const [periodoFilter, setPeriodoFilter] = useState<string>("esteMes")
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
+  const [showMeetingsGoal, setShowMeetingsGoal] = useState(false)
 
   // Rankings state
   const [topClosers, setTopClosers] = useState<TopCloser[]>([])
@@ -206,8 +216,8 @@ export function DashboardContent() {
         totalFaturamento: 0, totalMRR: 0, metaMensal: 0, metaDiaria: 0,
         faturamentoDiario: 0, progressoMetaDiaria: 0, diasUteis: 0, diasUteisDecorridos: 0,
         ticketMedio: 0, totalVendas: 0, clientesAdquiridos: 0, totalReunioesMarcadas: 0,
-        metaReunioesSdr: 0, planosMensais: 0, planosTrimestrais: 0, planosSemestrais: 0,
-        planosAnuais: 0
+        metaReunioesSdr: 0, metaDiariaReunioes: 0, reunioesDiarias: 0, progressoMetaDiariaReunioes: 0,
+        planosMensais: 0, planosTrimestrais: 0, planosSemestrais: 0, planosAnuais: 0
       })
     } finally {
       setLoading(false)
@@ -309,17 +319,48 @@ export function DashboardContent() {
           </div>
           
           <div className="flex-shrink-0 w-full sm:w-auto lg:text-right bg-muted/30 p-4 rounded-lg lg:bg-transparent lg:p-0">
+            {/* Toggle entre MRR e Reuniões */}
+            <div className="flex items-center justify-center lg:justify-end mb-3 gap-2">
+              <DollarSign className={`h-4 w-4 ${!showMeetingsGoal ? 'text-green-600' : 'text-muted-foreground'}`} />
+              <button
+                onClick={() => setShowMeetingsGoal(!showMeetingsGoal)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showMeetingsGoal ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+              </button>
+              <Calendar className={`h-4 w-4 ${showMeetingsGoal ? 'text-green-600' : 'text-muted-foreground'}`} />
+            </div>
+            
             <div className="text-center lg:text-right">
-              <div className="text-xl sm:text-2xl font-bold text-green-600">
-                {loading ? "..." : `${stats.progressoMetaDiaria.toFixed(1)}%`}
-              </div>
-              <div className="text-sm text-muted-foreground">Meta Diária MRR</div>
-              <div className="text-xs text-muted-foreground">
-                {loading ? "..." : `${formatCurrency(stats.faturamentoDiario)} de ${formatCurrency(stats.metaDiaria)}`}
-              </div>
-              <div className="w-full lg:w-48 mt-2 mx-auto lg:mx-0">
-                <Progress value={Math.min(stats.progressoMetaDiaria, 100)} className="h-2" />
-              </div>
+              {!showMeetingsGoal ? (
+                // Card de Meta MRR
+                <>
+                  <div className="text-xl sm:text-2xl font-bold text-green-600">
+                    {loading ? "..." : `${stats.progressoMetaDiaria.toFixed(1)}%`}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Meta Diária MRR</div>
+                  <div className="text-xs text-muted-foreground">
+                    {loading ? "..." : `${formatCurrency(stats.faturamentoDiario)} de ${formatCurrency(stats.metaDiaria)}`}
+                  </div>
+                  <div className="w-full lg:w-48 mt-2 mx-auto lg:mx-0">
+                    <Progress value={Math.min(stats.progressoMetaDiaria, 100)} className="h-2" />
+                  </div>
+                </>
+              ) : (
+                // Card de Meta Reuniões
+                <>
+                  <div className="text-xl sm:text-2xl font-bold text-green-600">
+                    {loading ? "..." : `${stats.progressoMetaDiariaReunioes.toFixed(1)}%`}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Meta Diária Reuniões</div>
+                  <div className="text-xs text-muted-foreground">
+                    {loading ? "..." : `${stats.reunioesDiarias} de ${stats.metaDiariaReunioes.toFixed(1)} reuniões`}
+                  </div>
+                  <div className="w-full lg:w-48 mt-2 mx-auto lg:mx-0">
+                    <Progress value={Math.min(stats.progressoMetaDiariaReunioes, 100)} className="h-2" />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
