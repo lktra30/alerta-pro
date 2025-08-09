@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { PhoneInputField } from "@/components/ui/phone-input"
 import { Plus, Save, X, Loader2 } from "lucide-react"
 import { createCliente, isSupabaseConfigured, getColaboradores, refreshSchemaCache, getPlanos } from "@/lib/supabase"
 import { validateVendaRealizadaData } from "@/lib/validations"
@@ -185,36 +186,7 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
     return true
   }
 
-  // Format phone number as user types
-  const formatPhone = (value: string) => {
-    // Remove all non-digits
-    const digits = value.replace(/\D/g, '')
-    
-    // Don't format if too long
-    if (digits.length > 11) {
-      return value.substring(0, 15) // Keep maxLength working
-    }
-    
-    // Format based on length
-    if (digits.length >= 11) {
-      // 11 digits: (XX) 9XXXX-XXXX (mobile)
-      return digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
-    } else if (digits.length >= 10) {
-      // 10 digits: (XX) XXXX-XXXX (landline)
-      return digits.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
-    } else if (digits.length >= 7) {
-      // 7-9 digits: partial formatting
-      return digits.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3')
-    } else if (digits.length >= 3) {
-      // 3-6 digits: area code + start
-      return digits.replace(/(\d{2})(\d{0,5})/, '($1) $2')
-    } else if (digits.length >= 1) {
-      // 1-2 digits: just area code
-      return digits.replace(/(\d{0,2})/, '($1')
-    }
-    
-    return digits
-  }
+
 
   const resetForm = () => {
     setForm({
@@ -351,20 +323,15 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="telefone" className="text-sm font-medium">Telefone</Label>
-            <Input
-              id="telefone"
-              value={form.telefone}
-              onChange={(e) => {
-                const formatted = formatPhone(e.target.value)
-                handleInputChange('telefone', formatted)
-              }}
-              placeholder="(11) 99999-9999"
-              disabled={loading}
-              maxLength={15}
-            />
-          </div>
+                      <div className="space-y-2">
+              <Label htmlFor="telefone" className="text-sm font-medium">Telefone</Label>
+              <PhoneInputField
+                value={form.telefone}
+                onChange={(value) => handleInputChange('telefone', value || '')}
+                placeholder="(11) 99999-9999"
+                disabled={loading}
+              />
+            </div>
 
           <div className="space-y-2">
             <Label htmlFor="empresa" className="text-sm font-medium">Empresa</Label>

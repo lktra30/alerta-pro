@@ -5,21 +5,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PhoneInputField } from "@/components/ui/phone-input"
 import { Plus, Save, X, Loader2 } from "lucide-react"
 import { createCliente, isSupabaseConfigured } from "@/lib/supabase"
-// Removido: imports de validação não utilizados
 import type { EtapaEnum } from "@/types/database"
 
 interface NovoClienteForm {
@@ -80,36 +80,7 @@ export function NovoClientePopover() {
     }))
   }
 
-  // Format phone number as user types
-  const formatPhone = (value: string) => {
-    // Remove all non-digits
-    const digits = value.replace(/\D/g, '')
-    
-    // Don't format if too long
-    if (digits.length > 11) {
-      return value.substring(0, 15) // Keep maxLength working
-    }
-    
-    // Format based on length
-    if (digits.length >= 11) {
-      // 11 digits: (XX) 9XXXX-XXXX (mobile)
-      return digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
-    } else if (digits.length >= 10) {
-      // 10 digits: (XX) XXXX-XXXX (landline)
-      return digits.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
-    } else if (digits.length >= 7) {
-      // 7-9 digits: partial formatting
-      return digits.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3')
-    } else if (digits.length >= 3) {
-      // 3-6 digits: area code + start
-      return digits.replace(/(\d{2})(\d{0,5})/, '($1) $2')
-    } else if (digits.length >= 1) {
-      // 1-2 digits: just area code
-      return digits.replace(/(\d{0,2})/, '($1')
-    }
-    
-    return digits
-  }
+
 
   const resetForm = () => {
     setForm({
@@ -258,16 +229,11 @@ export function NovoClientePopover() {
 
               <div>
                 <Label htmlFor="telefone">Telefone</Label>
-                <Input
-                  id="telefone"
+                <PhoneInputField
                   value={form.telefone}
-                  onChange={(e) => {
-                    const formatted = formatPhone(e.target.value)
-                    handleInputChange('telefone', formatted)
-                  }}
+                  onChange={(value) => handleInputChange('telefone', value || '')}
                   placeholder="(11) 99999-9999"
                   disabled={loading}
-                  maxLength={15}
                 />
               </div>
 
