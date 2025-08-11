@@ -177,10 +177,6 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         // REMOVIDO: alert de valor base
         return false
       }
-      if (!form.closer_id) {
-        // REMOVIDO: alert de closer
-        return false
-      }
     }
 
     return true

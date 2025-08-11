@@ -114,10 +114,7 @@ export function NovoClientePopover() {
       return
     }
 
-    if (!form.closer_id.trim()) {
-      // REMOVIDO: alert de closer
-      return
-    }
+
 
     // VALIDAÇÃO ESPECIAL: Se tentando criar como "Vendas Realizadas", verificar dados obrigatórios
     if (form.etapa === 'Vendas Realizadas') {
@@ -342,7 +339,7 @@ export function NovoClientePopover() {
             <div className="flex gap-2 pt-4 border-t">
               <Button
                 onClick={handleSave}
-                disabled={loading || !form.nome.trim() || !form.sdr_id || !form.closer_id}
+                disabled={loading || !form.nome.trim() || !form.sdr_id}
                 className="flex-1"
               >
                 {loading ? (

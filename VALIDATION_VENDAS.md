@@ -12,6 +12,8 @@ Para marcar como "Vendas Realizadas", é **obrigatório** preencher:
 - ✅ **Tipo do Plano** (mensal/trimestral/semestral/anual)  
 - ✅ **Valor Base do Plano** (> 0)
 
+**⚠️ NOTA**: A validação de **Closer obrigatório** foi **removida** para permitir que SDRs possam fechar vendas diretamente.
+
 ## 🔒 Onde as Validações Funcionam
 
 ### 1. **🎯 Kanban Board (CRM)**
@@ -50,6 +52,8 @@ Para marcar como "Vendas Realizadas", é obrigatório preencher:
 • Valor Base do Plano
 
 Por favor, preencha todos os campos antes de continuar.
+
+NOTA: Closer não é mais obrigatório - SDRs podem fechar vendas diretamente.
 ```
 
 ### **Validação Parcial (Popover):**

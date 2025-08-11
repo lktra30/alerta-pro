@@ -245,10 +245,6 @@ export function ClienteDetailsCard({ cliente, isOpen, onOpenChange, onClienteUpd
         // REMOVIDO: alert de valor base
         return false
       }
-      if (!form.closer_id) {
-        // REMOVIDO: alert de closer
-        return false
-      }
     }
 
     return true
