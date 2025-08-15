@@ -5,8 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 // Cliente para middleware (compatível com edge runtime)
 // Este arquivo não importa o cliente completo do Supabase para evitar problemas com Edge Runtime
 export const createMiddlewareClient = (request: NextRequest, response: NextResponse) => {
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return null
