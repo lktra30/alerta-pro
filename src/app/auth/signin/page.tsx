@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,11 +10,12 @@ import { Label } from "@/components/ui/label"
 import { AlertCircle, Loader2, LayoutDashboard } from "lucide-react"
 
 export default function SignIn() {
-  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { signIn } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,23 +23,15 @@ export default function SignIn() {
     setError("")
 
     try {
-      const result = await signIn("credentials", {
-        username,
-        password,
-        redirect: false,
-      })
+      const success = await signIn(email, password)
 
-      if (result?.error) {
-        setError("Credenciais inválidas. Verifique seu usuário e senha.")
-      } else if (result?.ok) {
-        // Verificar se a sessão foi criada corretamente
-        const session = await getSession()
-        if (session) {
-          router.push("/")
-          router.refresh()
-        }
+      if (success) {
+        router.push("/")
+        router.refresh()
+      } else {
+        setError("Credenciais inválidas. Verifique seu email e senha.")
       }
-    } catch (error) {
+    } catch {
       setError("Erro interno. Tente novamente.")
     } finally {
       setLoading(false)
@@ -72,15 +65,15 @@ export default function SignIn() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-medium">
-                  Usuário
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email
                 </Label>
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="Digite seu usuário"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="Digite seu email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={loading}
                   className="h-10"

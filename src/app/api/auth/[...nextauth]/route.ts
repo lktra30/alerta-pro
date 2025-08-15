@@ -1,6 +1,12 @@
-import NextAuth from "next-auth"
-import { authOptions } from "@/lib/auth"
+// Este arquivo foi migrado para usar Supabase Auth
+// NextAuth não é mais usado neste projeto
 
-const handler = NextAuth(authOptions)
+import { NextResponse } from 'next/server'
 
-export { handler as GET, handler as POST } 
+export async function GET() {
+  return NextResponse.json({ message: 'Este endpoint foi migrado para Supabase Auth' }, { status: 404 })
+}
+
+export async function POST() {
+  return NextResponse.json({ message: 'Este endpoint foi migrado para Supabase Auth' }, { status: 404 })
+} 

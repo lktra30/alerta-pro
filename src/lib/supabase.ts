@@ -1,10 +1,15 @@
+// Este arquivo contém funcionalidades do Supabase
+// A autenticação foi migrada para server-side com rotas API seguras
+// URLs do Supabase não são mais expostas no frontend
+
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 
+// Para compatibilidade, mantemos algumas funções mas sem expor URLs
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Only create client if environment variables are properly configured
+// Cliente apenas para operações específicas (não auth)
 export const supabase = supabaseUrl && supabaseAnonKey 
   ? createClient<Database>(supabaseUrl, supabaseAnonKey)
   : null
