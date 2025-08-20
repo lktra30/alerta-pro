@@ -597,7 +597,9 @@ export async function getFunnelData(startDate?: string, endDate?: string) {
     const agendados = stageCounts['Agendados']
     const reunioesFeitas = stageCounts['Reunioes Feitas']
     const vendasRealizadas = stageCounts['Vendas Realizadas']
-    const reunioesSemFechamento = stageCounts['Reunioes sem Fechamento']
+    
+    // Reuniões sem fechamento = reuniões feitas - vendas realizadas
+    const reunioesSemFechamento = Math.max(0, reunioesFeitas - vendasRealizadas)
 
     return [
       {
