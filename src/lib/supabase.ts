@@ -1080,52 +1080,6 @@ export async function createCliente(clienteData: {
 
     if (error) {
       console.error('Error creating client:', error)
-      
-      // If it's a schema cache error, try alternative approach
-      if (error.code === 'PGRST204') {
-        console.log('Schema cache error detected during creation. Trying alternative approach...')
-        
-        // Try creating without the problematic fields first, then add them
-        const { closer_id, sdr_id, ...safeData } = clienteData
-        
-        const { data: partialData, error: partialError } = await supabase
-          .from('clientes')
-          .insert([safeData])
-          .select('*')
-          .single()
-
-        if (partialError) {
-          return { success: false, error: `Primary creation failed: ${partialError.message}` }
-        }
-
-        // Now try to update with the collaborator IDs if they were provided
-        if (closer_id !== undefined || sdr_id !== undefined) {
-          const collaboratorUpdate: { sdr_id?: number | null; closer_id?: number | null } = {}
-          if (sdr_id !== undefined) collaboratorUpdate.sdr_id = sdr_id
-          if (closer_id !== undefined) collaboratorUpdate.closer_id = closer_id
-
-          const { data: finalData, error: finalError } = await supabase
-            .from('clientes')
-            .update(collaboratorUpdate)
-            .eq('id', partialData.id)
-            .select('*')
-            .single()
-
-          if (finalError) {
-            console.warn('Collaborator assignment failed, but client was created:', finalError)
-            return { 
-              success: true, 
-              data: partialData, 
-              warning: `Client created but collaborator assignment failed: ${finalError.message}` 
-            }
-          }
-
-          return { success: true, data: finalData }
-        }
-
-        return { success: true, data: partialData }
-      }
-      
       return { success: false, error: error.message }
     }
 

@@ -157,7 +157,7 @@ export function NovoClientePopover() {
       }
 
       console.log('Cliente criado com sucesso:', result.data)
-              console.log('Cliente criado com sucesso!')
+      console.log('Cliente criado com sucesso!')
       resetForm()
       setOpen(false)
 

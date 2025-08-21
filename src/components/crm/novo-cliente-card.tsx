@@ -252,16 +252,16 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
         clienteData.data_fechamento = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
       }
 
-      const novoCliente = await createCliente(clienteData)
+      const result = await createCliente(clienteData)
       
-      if (novoCliente) {
-        console.log('Cliente criado com sucesso:', novoCliente)
+      if (result.success) {
+        console.log('Cliente criado com sucesso:', result.data)
         resetForm()
         onClienteAdicionado?.()
         onOpenChange(false)
         success("Cliente Criado", "O cliente foi adicionado com sucesso!")
       } else {
-        throw new Error('Failed to create cliente')
+        throw new Error(result.error || 'Failed to create cliente')
       }
           } catch (err) {
         console.error('Error creating cliente:', err)
