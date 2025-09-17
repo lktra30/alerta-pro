@@ -29,6 +29,7 @@ interface ComissaoData {
 export function ComissaoPage() {
   const [showConfig, setShowConfig] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
+  const [clientesFiltradosState, setClientesFiltradosState] = useState<Cliente[]>([])
   const [reunioesFiltradas, setReunioesFiltradas] = useState<any[]>([])
   const [periodoFilter, setPeriodoFilter] = useState<string>("esteMes")
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
@@ -225,6 +226,7 @@ export function ComissaoPage() {
     setTotalComissoes(totalGeral)
     setMrrTotal(mrrGeral)
     setReunioesFiltradas(reunioesFiltradas)
+    setClientesFiltradosState(clientesFiltrados)
   }, [periodoFilter, customDateRange])
 
   // Carregar dados
@@ -270,9 +272,26 @@ export function ComissaoPage() {
     return tipo === 'sdr' ? 'SDR' : 'Closer'
   }
 
+  const getMrrForCloser = (closerId: number) => {
+    const vendas = clientesFiltradosState.filter(c => 
+      c.closer_id === closerId && 
+      c.etapa === 'Vendas Realizadas' && 
+      c.valor_venda && c.valor_venda > 0
+    )
+
+    return vendas.reduce((total, venda) => {
+      const valorVenda = venda.valor_venda || 0
+      const valorMensal = venda.tipo_plano === 'mensal' ? valorVenda :
+                          venda.tipo_plano === 'trimestral' ? valorVenda / 3 :
+                          venda.tipo_plano === 'semestral' ? valorVenda / 6 :
+                          venda.tipo_plano === 'anual' ? valorVenda / 12 : 0
+      return total + valorMensal
+    }, 0)
+  }
+
   const getMetaInfo = (colaborador: ComissaoData) => {
     if (colaborador.tipo === 'sdr') {
-      const clientesSDR = clientes.filter(c => c.sdr_id === colaborador.colaborador.id)
+      const clientesSDR = clientesFiltradosState.filter(c => c.sdr_id === colaborador.colaborador.id)
       
       // Realizadas = clientes com etapa "Reunioes Feitas" ou "Vendas Realizadas"
       const realizadas = clientesSDR.filter(c => 
@@ -285,7 +304,7 @@ export function ComissaoPage() {
         
         // Verificar se cliente associado está em etapa válida
         if (r.cliente_id) {
-          const cliente = clientes.find(c => c.id === r.cliente_id)
+          const cliente = clientesFiltradosState.find(c => c.id === r.cliente_id)
           return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
         }
         return false
@@ -303,19 +322,7 @@ export function ComissaoPage() {
       
       return `${agendadas} agendadas / ${realizadas} realizadas / ${gerouVenda} gerou venda`
     } else {
-      const vendas = clientes.filter(c => 
-        c.closer_id === colaborador.colaborador.id && 
-        c.etapa === 'Vendas Realizadas' && 
-        c.valor_venda && c.valor_venda > 0
-      )
-      const mrr = vendas.reduce((total, venda) => {
-        const valorVenda = venda.valor_venda || 0
-        const valorMensal = venda.tipo_plano === 'mensal' ? valorVenda :
-                           venda.tipo_plano === 'trimestral' ? valorVenda / 3 :
-                           venda.tipo_plano === 'semestral' ? valorVenda / 6 :
-                           venda.tipo_plano === 'anual' ? valorVenda / 12 : 0
-        return total + valorMensal
-      }, 0)
+      const mrr = getMrrForCloser(colaborador.colaborador.id)
       return `MRR: ${formatCurrency(mrr)}`
     }
   }
@@ -483,6 +490,7 @@ export function ComissaoPage() {
         <CardContent className="space-y-4 p-4 sm:p-6">
           {comissoes.filter(c => c.tipo === 'closer').map((item) => {
             const comissaoCloser = item.comissao as ComissaoCloserResult
+            const mrrNoPeriodo = getMrrForCloser(item.colaborador.id)
             return (
               <div key={item.colaborador.id} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
@@ -499,7 +507,7 @@ export function ComissaoPage() {
                 </div>
                 
                 <div className="text-sm text-muted-foreground mb-2 truncate">
-                  MRR no período: {formatCurrency((item.comissao as ComissaoCloserResult).mrrGerado)}
+                  MRR no período: {formatCurrency(mrrNoPeriodo)}
                 </div>
 
                 {/* Informações de planos vendidos - Responsiva */}
@@ -581,3 +589,4 @@ export function ComissaoPage() {
     </div>
   )
 }
+
