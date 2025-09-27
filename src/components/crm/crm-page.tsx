@@ -34,11 +34,13 @@ import {
   AlertCircle,
   Trash2,
   Table as TableIcon,
-  LayoutGrid
+  LayoutGrid,
+  UserCircle2,
+  UserCheck
 } from "lucide-react"
 import type { DateRange } from "react-day-picker"
-import { Cliente, EtapaEnum } from "@/types/database"
-import { getClientes, updateClienteEtapa, isSupabaseConfigured, deleteCliente } from "@/lib/supabase"
+import { Cliente, Colaborador, EtapaEnum } from "@/types/database"
+import { getClientes, updateClienteEtapa, isSupabaseConfigured, deleteCliente, getColaboradores } from "@/lib/supabase"
 import { isVendaRealizadaDataComplete } from "@/lib/validations"
 import { NovoClienteCard } from "./novo-cliente-card"
 import { ClienteDetailsCard } from "./cliente-details-card"
@@ -71,6 +73,7 @@ const getEtapaColor = (etapa: EtapaEnum) => {
 
 export function CRMPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
@@ -80,8 +83,6 @@ export function CRMPage() {
   const [periodoFilter, setPeriodoFilter] = useState<string>("esteMes")
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>()
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [totalReceita, setTotalReceita] = useState(0)
-  const [totalMRR, setTotalMRR] = useState(0)
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table')
   const [draggedOver, setDraggedOver] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -103,6 +104,7 @@ export function CRMPage() {
 
   useEffect(() => {
     loadClientes()
+    loadColaboradores()
   }, [])
 
   const loadClientes = async () => {
@@ -124,6 +126,54 @@ export function CRMPage() {
       setClientes([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadColaboradores = async () => {
+    try {
+      if (!isSupabaseConfigured()) {
+        setColaboradores([])
+        return
+      }
+
+      const data = await getColaboradores()
+      setColaboradores(data || [])
+    } catch (error) {
+      console.error('Error loading colaboradores:', error)
+      setColaboradores([])
+    }
+  }
+
+  const colaboradoresMap = useMemo(() => {
+    return colaboradores.reduce<Record<number, Colaborador>>((acc, colaborador) => {
+      acc[colaborador.id] = colaborador
+      return acc
+    }, {})
+  }, [colaboradores])
+
+  const getColaborador = (id?: number) => {
+    if (!id) return null
+    return colaboradoresMap[id] || null
+  }
+
+  const getColaboradorDisplayNames = (cliente: Cliente) => {
+    const sdr = getColaborador(cliente.sdr_id)
+    const closer = getColaborador(cliente.closer_id)
+
+    let sdrName = sdr?.nome || null
+    let closerName = closer?.nome || null
+
+    if (!closerName && sdr?.funcao?.toLowerCase() === 'sdr/closer') {
+      closerName = sdr.nome
+    }
+
+    if (!sdrName && closer?.funcao?.toLowerCase() === 'sdr/closer') {
+      sdrName = closer.nome
+    }
+
+    return {
+      sdrName,
+      closerName
     }
   }
 
@@ -729,13 +779,14 @@ export function CRMPage() {
           {viewMode === 'table' ? (
             <div className="w-full">
               <div className="overflow-x-auto">
-                <div className="rounded-md border min-w-[800px]">
+                <div className="rounded-md border min-w-[960px]">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="min-w-[180px]">Cliente</TableHead>
                         <TableHead className="min-w-[150px]">Empresa</TableHead>
                         <TableHead className="min-w-[200px]">Contato</TableHead>
+                        <TableHead className="min-w-[220px]">SDR / Closer</TableHead>
                         <TableHead className="min-w-[100px]">Origem</TableHead>
                         <TableHead className="min-w-[180px]">Etapa</TableHead>
                         <TableHead className="min-w-[120px]">Valor</TableHead>
@@ -746,7 +797,7 @@ export function CRMPage() {
                     <TableBody>
                       {loading ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
+                          <TableCell colSpan={9} className="text-center py-8">
                             <div className="flex items-center justify-center gap-2">
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                               Carregando clientes...
@@ -755,7 +806,7 @@ export function CRMPage() {
                         </TableRow>
                       ) : filteredClientes.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
+                          <TableCell colSpan={9} className="text-center py-8">
                             <div className="text-muted-foreground">
                               <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                               Nenhum cliente encontrado
@@ -763,103 +814,124 @@ export function CRMPage() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredClientes.map((cliente) => (
-                          <TableRow key={cliente.id} className="hover:bg-muted/50">
-                            <TableCell className="font-medium">
-                              <div>
-                                <div className="font-medium truncate">{cliente.nome}</div>
-                                <div className="text-sm text-muted-foreground">ID: {cliente.id}</div>
-                              </div>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                <span className="truncate">{cliente.empresa || '-'}</span>
-                              </div>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <div className="space-y-1">
-                                {cliente.email && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Mail className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="truncate">{cliente.email}</span>
+                        filteredClientes.map((cliente) => {
+                          const { sdrName, closerName } = getColaboradorDisplayNames(cliente)
+
+                          return (
+                            <TableRow key={cliente.id} className="hover:bg-muted/50">
+                              <TableCell className="font-medium">
+                                <div>
+                                  <div className="font-medium truncate">{cliente.nome}</div>
+                                  <div className="text-sm text-muted-foreground">ID: {cliente.id}</div>
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="truncate">{cliente.empresa || '-'}</span>
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <div className="space-y-1">
+                                  {cliente.email && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <Mail className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="truncate">{cliente.email}</span>
+                                    </div>
+                                  )}
+                                  {cliente.telefone && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                      <span className="truncate">{cliente.telefone}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              <TableCell>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <UserCircle2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                    <span className="truncate">
+                                      SDR: {sdrName ?? '—'}
+                                    </span>
                                   </div>
-                                )}
-                                {cliente.telefone && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="truncate">{cliente.telefone}</span>
+                                  <div className="flex items-center gap-2">
+                                    <UserCheck className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                    <span className="truncate">
+                                      Closer: {closerName ?? '—'}
+                                    </span>
                                   </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <Badge variant="outline" className="truncate">{cliente.origem || 'N/A'}</Badge>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <Select
-                                value={cliente.etapa}
-                                onValueChange={(value: EtapaEnum) => handleEtapaChange(cliente.id, value)}
-                              >
-                                <SelectTrigger className="w-40">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {etapas.map((etapa) => (
-                                    <SelectItem key={etapa} value={etapa}>
-                                      <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${getEtapaColor(etapa).replace('text-', 'bg-')}`} />
-                                        <span className="truncate">{etapa}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <div>
-                                <div className="font-medium truncate">{formatCurrency(cliente.valor_venda)}</div>
-                                {cliente.data_fechamento && (
-                                  <div className="text-xs text-muted-foreground truncate">
-                                    Fechado: {formatDate(cliente.data_fechamento)}
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <div className="text-sm">
-                                {formatDate(cliente.criado_em)}
-                              </div>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleOpenDetails(cliente)}
-                                  className="h-8 px-2 text-xs"
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <Badge variant="outline" className="truncate">{cliente.origem || 'N/A'}</Badge>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <Select
+                                  value={cliente.etapa}
+                                  onValueChange={(value: EtapaEnum) => handleEtapaChange(cliente.id, value)}
                                 >
-                                  Detalhes
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleDeleteCliente(cliente.id, cliente.nome)}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                                  <SelectTrigger className="w-40">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {etapas.map((etapa) => (
+                                      <SelectItem key={etapa} value={etapa}>
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-2 h-2 rounded-full ${getEtapaColor(etapa).replace('text-', 'bg-')}`} />
+                                          <span className="truncate">{etapa}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium truncate">{formatCurrency(cliente.valor_venda)}</div>
+                                  {cliente.data_fechamento && (
+                                    <div className="text-xs text-muted-foreground truncate">
+                                      Fechado: {formatDate(cliente.data_fechamento)}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <div className="text-sm">
+                                  {formatDate(cliente.criado_em)}
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => handleOpenDetails(cliente)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Detalhes
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => handleDeleteCliente(cliente.id, cliente.nome)}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
                       )}
                     </TableBody>
                   </Table>

@@ -4,6 +4,13 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { UserPlus, X } from "lucide-react"
 import { createColaborador } from "@/lib/supabase"
@@ -85,15 +92,20 @@ export function NovoColaboradorCard({ onCancel, onSuccess }: NovoColaboradorCard
             
             <div className="space-y-2">
               <Label htmlFor="funcao">Função *</Label>
-              <Input
-                id="funcao"
-                type="text"
-                placeholder="Ex: Desenvolvedor, Designer, Gerente"
-                value={funcao}
-                onChange={(e) => setFuncao(e.target.value)}
+              <Select
+                value={funcao || undefined}
+                onValueChange={(value) => setFuncao(value)}
                 disabled={loading}
-                required
-              />
+              >
+                <SelectTrigger id="funcao">
+                  <SelectValue placeholder="Selecione o cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SDR">SDR</SelectItem>
+                  <SelectItem value="Closer">Closer</SelectItem>
+                  <SelectItem value="SDR/Closer">SDR/Closer</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
