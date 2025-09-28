@@ -1984,6 +1984,18 @@ function calculateMRR(valorBase: number, tipoPlano: string): number {
   }
 }
 
+const normalizeRole = (funcao?: string) => (funcao || '').toLowerCase()
+
+const isSDRRole = (funcao?: string) => {
+  const role = normalizeRole(funcao)
+  return role === 'sdr' || role === 'sdr/closer'
+}
+
+const isCloserRole = (funcao?: string) => {
+  const role = normalizeRole(funcao)
+  return role === 'closer' || role === 'sdr/closer'
+}
+
 // Função para buscar top closers do banco
 export async function getTopClosers(dataInicio?: string, dataFim?: string): Promise<TopCloser[]> {
   if (!isSupabaseConfigured() || !supabase) {
@@ -2047,7 +2059,7 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
 
     vendas.forEach((venda: any) => {
       const colaborador = colaboradoresMap.get(venda.closer_id)
-      if (colaborador && colaborador.funcao.toLowerCase() === 'closer') {
+      if (colaborador && isCloserRole(colaborador.funcao)) {
         const closerId = venda.closer_id
         if (!closersMap.has(closerId)) {
           closersMap.set(closerId, {
@@ -2193,8 +2205,8 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
     // Processar reuniões - APENAS de clientes em etapas válidas (se existirem)
     if (reunioes && reunioes.length > 0) {
       reunioes.forEach((reuniao: any) => {
-        const colaborador = colaboradoresMap.get(reuniao.sdr_id)
-        if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+  const colaborador = colaboradoresMap.get(reuniao.sdr_id)
+  if (colaborador && isSDRRole(colaborador.funcao)) {
           // VERIFICAR SE CLIENTE ESTÁ EM ETAPA VÁLIDA
           if (reuniao.cliente_id) {
             const cliente = todosClientes?.find(c => c.id === reuniao.cliente_id)
@@ -2244,7 +2256,7 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
           if (sdrId) {
             const colaborador = colaboradoresMap.get(sdrId)
             
-            if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+            if (colaborador && isSDRRole(colaborador.funcao)) {
               if (!sdrsMap.has(sdrId)) {
                 sdrsMap.set(sdrId, {
                   id: sdrId,
@@ -2264,8 +2276,8 @@ export async function getTopSDRs(dataInicio?: string, dataFim?: string): Promise
     // Processar vendas
     if (vendas) {
       vendas.forEach((venda: any) => {
-        const colaborador = colaboradoresMap.get(venda.sdr_id)
-        if (colaborador && colaborador.funcao.toLowerCase() === 'sdr') {
+  const colaborador = colaboradoresMap.get(venda.sdr_id)
+  if (colaborador && isSDRRole(colaborador.funcao)) {
           const sdrId = venda.sdr_id
           if (sdrsMap.has(sdrId)) {
             sdrsMap.get(sdrId)?.vendas.push({
@@ -2473,9 +2485,9 @@ export async function getMetasIndividuais() {
       }
     }
 
-    const colaboradores = colaboradoresResult.data || []
-    const closers = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
-    const sdrs = colaboradores.filter(c => c.funcao.toLowerCase() === 'sdr')
+  const colaboradores = colaboradoresResult.data || []
+  const closers = colaboradores.filter(c => isCloserRole(c.funcao))
+  const sdrs = colaboradores.filter(c => isSDRRole(c.funcao))
 
     const metaComercial = metasResult?.valor_meta || 200000
     const metaSDR = metasSdrResult?.valor_meta || 50

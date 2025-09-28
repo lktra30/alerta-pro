@@ -7,6 +7,7 @@ interface Cliente {
   sdr_id?: number
   etapa: string
   valor_venda?: number
+  valor_base_plano?: number
   tipo_plano?: string
   criado_em?: string
 }
@@ -155,6 +156,22 @@ export function calculateMRR(valorVenda: number, tipoPlano: TipoPlano, config: P
   if (!plano) return 0
   
   return valorVenda / plano.periodo_meses
+}
+
+export function doesClienteCountForCloser(
+  cliente: Cliente,
+  closerId: number,
+  includeDualRoleFromSDR = false
+): boolean {
+  if (cliente.closer_id != null) {
+    return cliente.closer_id === closerId
+  }
+
+  if (!includeDualRoleFromSDR) {
+    return false
+  }
+
+  return cliente.sdr_id === closerId
 }
 
 // Função para calcular comissão do SDR
@@ -320,10 +337,15 @@ export function calculateComissaoCloserFromClientes(
   clientes: Cliente[],
   closerId: number,
   percentualMeta: number,
-  config: ComissaoCloserConfig
+  config: ComissaoCloserConfig,
+  options?: {
+    includeDualRoleFromSDR?: boolean
+  }
 ): ComissaoCloserResult {
+  const includeDualRoleFromSDR = options?.includeDualRoleFromSDR ?? false
+
   const vendasCloser = clientes.filter(c =>
-    c.closer_id === closerId &&
+    doesClienteCountForCloser(c, closerId, includeDualRoleFromSDR) &&
     c.etapa === 'Vendas Realizadas' &&
     c.valor_venda && c.valor_venda > 0
   );
@@ -377,15 +399,4 @@ export function calculateComissaoCloserFromClientes(
     detalhesVendas,
     percentualMeta,
   };
-}
-
-// Função auxiliar para obter fator de bonificação por tipo de plano
-function getFatorBonificacao(tipoPlano: string): number {
-  const fatores = {
-    'mensal': 50,     // 50%
-    'trimestral': 75, // 75%
-    'semestral': 100, // 100%
-    'anual': 125      // 125%
-  }
-  return fatores[tipoPlano as keyof typeof fatores] || 50
 }

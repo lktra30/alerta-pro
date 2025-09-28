@@ -12,12 +12,14 @@ import { getColaboradores, getAllClientes, getAllReunioes } from "@/lib/supabase
 import { 
   getNovaComissaoConfig, 
   calculateComissaoSDRFromClientes,
-  calculateComissaoCloserFromClientes,
+  calculateComissaoCloser,
+  calculateMRR,
+  doesClienteCountForCloser,
   type ComissaoSDRResult,
   type ComissaoCloserResult
 } from "@/lib/novo-comissionamento"
 import { NovaConfiguracaoComissao } from "./nova-configuracao-comissao"
-import type { Colaborador, Cliente } from "@/types/database"
+import type { Colaborador, Cliente, TipoPlano } from "@/types/database"
 
 interface ComissaoData {
   colaborador: Colaborador
@@ -26,9 +28,20 @@ interface ComissaoData {
   tipo: 'sdr' | 'closer'
 }
 
+const normalizeRole = (funcao?: string) => (funcao || '').toLowerCase()
+
+const isSDRRole = (funcao?: string) => {
+  const role = normalizeRole(funcao)
+  return role === 'sdr' || role === 'sdr/closer'
+}
+
+const isCloserRole = (funcao?: string) => {
+  const role = normalizeRole(funcao)
+  return role === 'closer' || role === 'sdr/closer'
+}
+
 export function ComissaoPage() {
   const [showConfig, setShowConfig] = useState(false)
-  const [clientes, setClientes] = useState<Cliente[]>([])
   const [clientesFiltradosState, setClientesFiltradosState] = useState<Cliente[]>([])
   const [reunioesFiltradas, setReunioesFiltradas] = useState<any[]>([])
   const [periodoFilter, setPeriodoFilter] = useState<string>("esteMes")
@@ -144,82 +157,90 @@ export function ComissaoPage() {
     let mrrGeral = 0
 
     for (const colaborador of colaboradoresData) {
-      let comissao: ComissaoSDRResult | ComissaoCloserResult
-      let percentualMeta = 0
-      let tipo: 'sdr' | 'closer' = 'sdr'
+      const includeSDR = isSDRRole(colaborador.funcao)
+      const includeCloser = isCloserRole(colaborador.funcao)
 
-      if (colaborador.funcao.toLowerCase() === 'sdr') {
+      if (includeSDR) {
         const clientesSDR = clientesFiltrados.filter(c => c.sdr_id === colaborador.id)
-        
-        // Contar reuniões realizadas pelos clientes
+
         const reunioesRealizadas = clientesSDR.filter(c => 
           ['Reunioes Feitas', 'Vendas Realizadas'].includes(c.etapa)
         ).length
-        
-        // Para SDR: calcular baseado em reuniões filtradas APENAS de clientes em etapas válidas
+
         const reunioesSDR = reunioesFiltradas.filter(r => {
           if (r.sdr_id !== colaborador.id) return false
-          
-          // Verificar se cliente está em etapa válida
+
           if (r.cliente_id) {
             const cliente = clientesFiltrados.find(c => c.id === r.cliente_id)
             return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
           }
           return false
         })
+
         const reunioesNaTabela = reunioesSDR.length
-        
-        // Total de reuniões = MAX entre reuniões na tabela e reuniões realizadas
         const totalReunioes = Math.max(reunioesNaTabela, reunioesRealizadas)
-        percentualMeta = (totalReunioes / metas.meta_sdr) * 100
-        
-        comissao = await calculateComissaoSDRFromClientes(
+        const percentualMetaSDR = (totalReunioes / metas.meta_sdr) * 100
+
+        const comissaoSDR = await calculateComissaoSDRFromClientes(
           clientesFiltrados,
           reunioesFiltradas,
           colaborador.id,
-          percentualMeta,
+          percentualMetaSDR,
           config.sdr
         )
-        tipo = 'sdr'
-      } else if (colaborador.funcao.toLowerCase() === 'closer') {
-        // Para Closer: calcular baseado em MRR
-        const vendasCloser = clientesFiltrados.filter(c => 
-          c.closer_id === colaborador.id && 
-          c.etapa === 'Vendas Realizadas' && 
-          c.valor_venda && c.valor_venda > 0
-        )
-        
-        // Calcular MRR das vendas do closer
-        const mrrCloser = vendasCloser.reduce((total, venda) => {
-          const valorVenda = venda.valor_venda || 0
-          const valorMensal = venda.tipo_plano === 'mensal' ? valorVenda :
-                             venda.tipo_plano === 'trimestral' ? valorVenda / 3 :
-                             venda.tipo_plano === 'semestral' ? valorVenda / 6 :
-                             venda.tipo_plano === 'anual' ? valorVenda / 12 : 0
-          return total + valorMensal
-        }, 0)
-        
-        percentualMeta = (mrrCloser / metas.meta_closer) * 100
-        mrrGeral += mrrCloser
-        
-        comissao = calculateComissaoCloserFromClientes(
-          clientesFiltrados,
-          colaborador.id,
-          percentualMeta,
-          config.closer
-        )
-        tipo = 'closer'
-      } else {
-        continue // Pular colaboradores que não são SDR nem Closer
+
+        totalGeral += comissaoSDR.total
+        comissoesCalculadas.push({
+          colaborador,
+          comissao: comissaoSDR,
+          percentualMeta: percentualMetaSDR,
+          tipo: 'sdr'
+        })
       }
 
-      totalGeral += comissao.total
-      comissoesCalculadas.push({
-        colaborador,
-        comissao,
-        percentualMeta,
-        tipo
-      })
+      if (includeCloser) {
+        const includeDualRoleFallback = includeSDR
+
+        const clientesVendas = clientesFiltrados.filter(cliente => 
+          doesClienteCountForCloser(cliente, colaborador.id, includeDualRoleFallback) &&
+          cliente.etapa === 'Vendas Realizadas' && 
+          cliente.valor_venda && cliente.valor_venda > 0
+        )
+
+        const vendasDetalhadas = clientesVendas.map(cliente => {
+          const tipoPlano = (cliente.tipo_plano || 'mensal') as TipoPlano
+          const valorVenda = cliente.valor_venda || 0
+          const valorBase = cliente.valor_base_plano ?? config.planos[tipoPlano]?.valor_base ?? 0
+
+          return {
+            tipo_plano: tipoPlano,
+            valor_venda: valorVenda,
+            valor_base: valorBase
+          }
+        })
+
+        const mrrCloser = vendasDetalhadas.reduce((total, venda) => {
+          return total + calculateMRR(venda.valor_venda, venda.tipo_plano, config.planos)
+        }, 0)
+
+        const percentualMetaCloser = (mrrCloser / metas.meta_closer) * 100
+
+        const comissaoCloser = calculateComissaoCloser(
+          vendasDetalhadas,
+          percentualMetaCloser,
+          config.closer,
+          config.planos
+        )
+
+        totalGeral += comissaoCloser.total
+        mrrGeral += comissaoCloser.mrrGerado
+        comissoesCalculadas.push({
+          colaborador,
+          comissao: comissaoCloser,
+          percentualMeta: comissaoCloser.percentualMeta,
+          tipo: 'closer'
+        })
+      }
     }
 
     setComissoes(comissoesCalculadas)
@@ -239,8 +260,6 @@ export function ComissaoPage() {
           getAllClientes(),
           getAllReunioes()
         ])
-        
-        setClientes(clientesData)
         
         // Calcular comissões
         await calculateAllComissoes(colaboradoresData, clientesData, reunioesData)
@@ -270,23 +289,6 @@ export function ComissaoPage() {
 
   const getTipoLabel = (tipo: 'sdr' | 'closer') => {
     return tipo === 'sdr' ? 'SDR' : 'Closer'
-  }
-
-  const getMrrForCloser = (closerId: number) => {
-    const vendas = clientesFiltradosState.filter(c => 
-      c.closer_id === closerId && 
-      c.etapa === 'Vendas Realizadas' && 
-      c.valor_venda && c.valor_venda > 0
-    )
-
-    return vendas.reduce((total, venda) => {
-      const valorVenda = venda.valor_venda || 0
-      const valorMensal = venda.tipo_plano === 'mensal' ? valorVenda :
-                          venda.tipo_plano === 'trimestral' ? valorVenda / 3 :
-                          venda.tipo_plano === 'semestral' ? valorVenda / 6 :
-                          venda.tipo_plano === 'anual' ? valorVenda / 12 : 0
-      return total + valorMensal
-    }, 0)
   }
 
   const getMetaInfo = (colaborador: ComissaoData) => {
@@ -322,8 +324,8 @@ export function ComissaoPage() {
       
       return `${agendadas} agendadas / ${realizadas} realizadas / ${gerouVenda} gerou venda`
     } else {
-      const mrr = getMrrForCloser(colaborador.colaborador.id)
-      return `MRR: ${formatCurrency(mrr)}`
+      const comissaoCloser = colaborador.comissao as ComissaoCloserResult
+      return `MRR: ${formatCurrency(comissaoCloser.mrrGerado)}`
     }
   }
 
@@ -337,6 +339,8 @@ export function ComissaoPage() {
       </div>
     )
   }
+
+  const colaboradoresAtivos = new Set(comissoes.map(c => c.colaborador.id)).size
 
   return (
     <div className="space-y-6">
@@ -395,7 +399,7 @@ export function ComissaoPage() {
                 <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </CardHeader>
               <CardContent className="p-4 sm:p-6">
-                <div className="text-xl sm:text-2xl font-bold text-purple-600">{comissoes.length}</div>
+                <div className="text-xl sm:text-2xl font-bold text-purple-600">{colaboradoresAtivos}</div>
               </CardContent>
             </Card>
 
@@ -432,7 +436,7 @@ export function ComissaoPage() {
           {comissoes.filter(c => c.tipo === 'sdr').map((item) => {
             const comissaoSDR = item.comissao as ComissaoSDRResult
             return (
-              <div key={item.colaborador.id} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
+              <div key={`${item.colaborador.id}-sdr`} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <h3 className="font-semibold truncate">{item.colaborador.nome}</h3>
@@ -490,9 +494,9 @@ export function ComissaoPage() {
         <CardContent className="space-y-4 p-4 sm:p-6">
           {comissoes.filter(c => c.tipo === 'closer').map((item) => {
             const comissaoCloser = item.comissao as ComissaoCloserResult
-            const mrrNoPeriodo = getMrrForCloser(item.colaborador.id)
+            const mrrNoPeriodo = comissaoCloser.mrrGerado
             return (
-              <div key={item.colaborador.id} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
+              <div key={`${item.colaborador.id}-closer`} className="border rounded-lg p-3 sm:p-4 overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <h3 className="font-semibold truncate">{item.colaborador.nome}</h3>
@@ -580,7 +584,6 @@ export function ComissaoPage() {
               getAllClientes(),
               getAllReunioes()
             ])
-            setClientes(clientesData)
             await calculateAllComissoes(colaboradoresData, clientesData, reunioesData)
           }
           loadData()

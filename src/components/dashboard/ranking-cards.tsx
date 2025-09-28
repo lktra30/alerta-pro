@@ -10,6 +10,7 @@ import {
   calculateComissaoSDR, 
   calculateComissaoCloser,
   calculateMRR,
+  doesClienteCountForCloser,
   type ComissaoSDRResult,
   type ComissaoCloserResult 
 } from "@/lib/novo-comissionamento"
@@ -21,6 +22,18 @@ interface ColaboradorSDR extends Colaborador {
 
 interface ColaboradorCloser extends Colaborador {
   stats: ComissaoCloserResult
+}
+
+const normalizeRole = (funcao?: string) => (funcao || '').toLowerCase()
+
+const isSDRRole = (funcao?: string) => {
+  const role = normalizeRole(funcao)
+  return role === 'sdr' || role === 'sdr/closer'
+}
+
+const isCloserRole = (funcao?: string) => {
+  const role = normalizeRole(funcao)
+  return role === 'closer' || role === 'sdr/closer'
 }
 
 export function RankingCards() {
@@ -54,7 +67,7 @@ export function RankingCards() {
       })
       
       const config = getNovaComissaoConfig()
-      const { colaboradores, reunioes, vendas, metas } = comissionamentoData
+  const { colaboradores, reunioes, metas } = comissionamentoData
       
       // FILTRAR reuniões apenas de clientes em etapas válidas
       const reunioesValidas = reunioes.filter(reuniao => {
@@ -68,7 +81,7 @@ export function RankingCards() {
       
       // Processar SDRs
       const sdrsData = colaboradores
-        .filter(c => c.funcao.toLowerCase() === 'sdr')
+        .filter(c => isSDRRole(c.funcao))
         .map(colaborador => {
           const clientesSDR = todosClientes.filter(c => c.sdr_id === colaborador.id)
           
@@ -103,17 +116,27 @@ export function RankingCards() {
         })
         .sort((a, b) => b.stats.total - a.stats.total)
       
+      const clientesComVenda = todosClientes.filter(cliente => 
+        cliente.etapa === 'Vendas Realizadas' &&
+        cliente.valor_venda && cliente.valor_venda > 0
+      )
+
       // Processar Closers
       const closersData = colaboradores
-        .filter(c => c.funcao.toLowerCase() === 'closer')
+        .filter(c => isCloserRole(c.funcao))
         .map(colaborador => {
-          const vendasColaborador = vendas
-            .filter(v => v.closer_id === colaborador.id)
-            .map(v => ({
-              tipo_plano: (v.tipo_plano || 'mensal') as TipoPlano,
-              valor_venda: v.valor_venda || 0,
-              valor_base: v.valor_base_plano || config.planos[v.tipo_plano as TipoPlano]?.valor_base || 0
-            }))
+          const includeDualRoleFallback = isSDRRole(colaborador.funcao)
+
+          const vendasColaborador = clientesComVenda
+            .filter(cliente => doesClienteCountForCloser(cliente, colaborador.id, includeDualRoleFallback))
+            .map(cliente => {
+              const tipoPlano = (cliente.tipo_plano || 'mensal') as TipoPlano
+              return {
+                tipo_plano: tipoPlano,
+                valor_venda: cliente.valor_venda || 0,
+                valor_base: cliente.valor_base_plano || config.planos[tipoPlano]?.valor_base || 0
+              }
+            })
           
           const mrrTotal = vendasColaborador.reduce((sum, v) => 
             sum + calculateMRR(v.valor_venda, v.tipo_plano, config.planos), 0

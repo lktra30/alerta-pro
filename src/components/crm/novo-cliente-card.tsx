@@ -277,8 +277,14 @@ export function NovoClienteCard({ onClienteAdicionado, isOpen, onOpenChange }: N
   }
 
   // Filter colaboradores by role
-  const sdrColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'sdr')
-  const closerColaboradores = colaboradores.filter(c => c.funcao.toLowerCase() === 'closer')
+  const sdrColaboradores = colaboradores.filter(c => {
+    const role = c.funcao.toLowerCase()
+    return role === 'sdr' || role === 'sdr/closer'
+  })
+  const closerColaboradores = colaboradores.filter(c => {
+    const role = c.funcao.toLowerCase()
+    return role === 'closer' || role === 'sdr/closer'
+  })
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
