@@ -1951,6 +1951,7 @@ export function getCheckpointInfo(checkpoint: 0 | 1 | 2 | 3): { name: string; co
 export interface TopCloser {
   id: number
   nome: string
+  funcao: string
   totalVendas: number
   totalMRR: number
   numeroVendas: number
@@ -2004,13 +2005,14 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
 
   try {
     // Buscar vendas sem JOIN com filtro por período
+    // Observação: removido filtro que exigia closer_id não nulo para permitir considerar
+    // vendas fechadas por colaboradores com função 'SDR/Closer' quando atuam sem um closer atribuído.
     let vendasQuery = supabase
       .from('clientes')
       .select('*')
       .eq('etapa', 'Vendas Realizadas')
       .not('data_fechamento', 'is', null)
       .not('valor_venda', 'is', null)
-      .not('closer_id', 'is', null)
     
     if (dataInicio) {
       vendasQuery = vendasQuery.gte('data_fechamento', dataInicio)
@@ -2050,6 +2052,7 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
     const closersMap = new Map<number, {
       id: number
       nome: string
+      funcao: string
       vendas: Array<{
         valor: number
         valorBase: number
@@ -2058,17 +2061,29 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
     }>()
 
     vendas.forEach((venda: any) => {
-      const colaborador = colaboradoresMap.get(venda.closer_id)
-      if (colaborador && isCloserRole(colaborador.funcao)) {
-        const closerId = venda.closer_id
-        if (!closersMap.has(closerId)) {
-          closersMap.set(closerId, {
-            id: closerId,
+      // Primeiro tenta via closer_id
+      let colaborador = venda.closer_id ? colaboradoresMap.get(venda.closer_id) : null
+      let colaboradorId = venda.closer_id
+
+      // Se não há closer_id mas há sdr_id, e o SDR tem função 'SDR/Closer', contar como venda dele
+      if (!colaborador && venda.sdr_id) {
+        const possivel = colaboradoresMap.get(venda.sdr_id)
+        if (possivel && normalizeRole(possivel.funcao) === 'sdr/closer') {
+          colaborador = possivel
+          colaboradorId = venda.sdr_id
+        }
+      }
+
+      if (colaborador && colaboradorId && isCloserRole(colaborador.funcao)) {
+        if (!closersMap.has(colaboradorId)) {
+          closersMap.set(colaboradorId, {
+            id: colaboradorId,
             nome: colaborador.nome,
+            funcao: colaborador.funcao,
             vendas: []
           })
         }
-        closersMap.get(closerId)?.vendas.push({
+        closersMap.get(colaboradorId)?.vendas.push({
           valor: venda.valor_venda || 0,
           valorBase: venda.valor_base_plano || venda.valor_venda || 0,
           tipo: venda.tipo_plano || 'mensal'
@@ -2102,6 +2117,7 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
       return {
         id: closer.id,
         nome: closer.nome,
+        funcao: closer.funcao,
         totalVendas,
         totalMRR,
         numeroVendas: closer.vendas.length,
@@ -2110,8 +2126,8 @@ export async function getTopClosers(dataInicio?: string, dataFim?: string): Prom
       }
     })
 
-    // Ordenar por total de MRR
-    return topClosers.sort((a, b) => b.totalMRR - a.totalMRR)
+    // Ordenar por quantidade de vendas (número de vendas)
+    return topClosers.sort((a, b) => b.numeroVendas - a.numeroVendas)
     
   } catch (error) {
     console.error('Error in getTopClosers:', error)

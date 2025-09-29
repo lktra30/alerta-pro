@@ -524,7 +524,9 @@ export function DashboardContent() {
                   </div>
                   <div className="flex-1 space-y-1 min-w-0">
                     <p className="text-base sm:text-lg font-semibold truncate">{topClosers[0].nome}</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Closer líder em MRR</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      {topClosers[0].funcao === 'SDR/Closer' ? 'SDR/Closer' : 'Closer'} líder em vendas
+                    </p>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-lg sm:text-xl font-bold text-green-600 truncate">
                         {formatCurrency(topClosers[0].totalMRR)}
