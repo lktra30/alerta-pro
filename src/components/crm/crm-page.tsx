@@ -181,7 +181,8 @@ export function CRMPage() {
     return clientes.filter(cliente => {
       const matchesSearch = cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           cliente.empresa?.toLowerCase().includes(searchTerm.toLowerCase())
+                           cliente.empresa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           cliente.telefone?.toLowerCase().includes(searchTerm.toLowerCase())
       
       const matchesStage = etapaFilter === "all" || cliente.etapa === etapaFilter
       
