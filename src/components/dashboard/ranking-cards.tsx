@@ -5,14 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Trophy, Target } from "lucide-react"
 import { getNovoComissionamentoStats, getMetasIndividuais, getClientes } from "@/lib/supabase"
-import { 
-  getNovaComissaoConfig, 
-  calculateComissaoSDR, 
+import {
+  getNovaComissaoConfig,
+  calculateComissaoSDR,
   calculateComissaoCloser,
   calculateMRR,
   doesClienteCountForCloser,
   type ComissaoSDRResult,
-  type ComissaoCloserResult 
+  type ComissaoCloserResult
 } from "@/lib/novo-comissionamento"
 import type { Colaborador, TipoPlano } from "@/types/database"
 
@@ -22,6 +22,11 @@ interface ColaboradorSDR extends Colaborador {
 
 interface ColaboradorCloser extends Colaborador {
   stats: ComissaoCloserResult
+}
+
+interface RankingCardsProps {
+  startDate?: string
+  endDate?: string
 }
 
 const normalizeRole = (funcao?: string) => (funcao || '').toLowerCase()
@@ -36,7 +41,7 @@ const isCloserRole = (funcao?: string) => {
   return role === 'closer' || role === 'sdr/closer'
 }
 
-export function RankingCards() {
+export function RankingCards({ startDate, endDate }: RankingCardsProps = {}) {
   const [sdrs, setSdrs] = useState<ColaboradorSDR[]>([])
   const [closers, setClosers] = useState<ColaboradorCloser[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,7 +54,7 @@ export function RankingCards() {
 
   useEffect(() => {
     loadRankingData()
-  }, [])
+  }, [startDate, endDate])
 
   const loadRankingData = async () => {
     try {
@@ -58,21 +63,47 @@ export function RankingCards() {
         getMetasIndividuais(),
         getClientes() // Buscar todos os clientes para validar etapas
       ])
-      
+
       setMetasIndividuais({
         metaIndividualCloser: metasIndividuaisData.metaIndividualCloser,
         metaIndividualSDR: metasIndividuaisData.metaIndividualSDR,
         totalClosers: metasIndividuaisData.totalClosers || 1,
         totalSDRs: metasIndividuaisData.totalSDRs || 1
       })
-      
+
       const config = getNovaComissaoConfig()
-  const { colaboradores, reunioes, metas } = comissionamentoData
-      
+      const { colaboradores, reunioes, metas } = comissionamentoData
+
+      // Filtrar clientes por período, se especificado
+      let clientesFiltrados = todosClientes
+      if (startDate && endDate) {
+        const dataInicio = new Date(startDate + 'T00:00:00')
+        const dataFim = new Date(endDate + 'T23:59:59')
+
+        clientesFiltrados = todosClientes.filter(cliente => {
+          if (!cliente.criado_em) return false
+          const clienteDate = new Date(cliente.criado_em)
+          return clienteDate >= dataInicio && clienteDate <= dataFim
+        })
+      }
+
+      // Filtrar reuniões por período, se especificado
+      let reunioesFiltradas = reunioes
+      if (startDate && endDate) {
+        const dataInicio = new Date(startDate + 'T00:00:00')
+        const dataFim = new Date(endDate + 'T23:59:59')
+
+        reunioesFiltradas = reunioes.filter(reuniao => {
+          if (!reuniao.data_reuniao) return false
+          const reuniaoDate = new Date(reuniao.data_reuniao)
+          return reuniaoDate >= dataInicio && reuniaoDate <= dataFim
+        })
+      }
+
       // FILTRAR reuniões apenas de clientes em etapas válidas
-      const reunioesValidas = reunioes.filter(reuniao => {
+      const reunioesValidas = reunioesFiltradas.filter(reuniao => {
         if (!reuniao.cliente_id) return false
-        const cliente = todosClientes.find(c => c.id === reuniao.cliente_id)
+        const cliente = clientesFiltrados.find(c => c.id === reuniao.cliente_id)
         return cliente && ['Agendados', 'Reunioes Feitas', 'Vendas Realizadas'].includes(cliente.etapa)
       })
       
@@ -83,7 +114,7 @@ export function RankingCards() {
       const sdrsData = colaboradores
         .filter(c => isSDRRole(c.funcao))
         .map(colaborador => {
-          const clientesSDR = todosClientes.filter(c => c.sdr_id === colaborador.id)
+          const clientesSDR = clientesFiltrados.filter(c => c.sdr_id === colaborador.id)
           
           // Contar reuniões realizadas pelos clientes
           const reunioesRealizadas = clientesSDR.filter(c => 
@@ -116,7 +147,7 @@ export function RankingCards() {
         })
         .sort((a, b) => b.stats.total - a.stats.total)
       
-      const clientesComVenda = todosClientes.filter(cliente => 
+      const clientesComVenda = clientesFiltrados.filter(cliente =>
         cliente.etapa === 'Vendas Realizadas' &&
         cliente.valor_venda && cliente.valor_venda > 0
       )
@@ -262,7 +293,7 @@ export function RankingCards() {
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-sm sm:text-base truncate">{sdr.nome}</div>
                         <div className="text-xs sm:text-sm text-muted-foreground truncate">
-                          {sdr.stats.reunioes.qualificadas + sdr.stats.reunioes.gerou_venda} reuniões
+                          {sdr.stats.reunioes.qualificadas} reuniões
                         </div>
                         <div className="text-xs text-muted-foreground truncate">
                           Meta: {metasIndividuais.metaIndividualSDR} reuniões
@@ -274,7 +305,7 @@ export function RankingCards() {
                         {formatCurrency(sdr.stats.total)}
                       </div>
                       <div className="text-xs sm:text-sm text-muted-foreground truncate">
-                        {formatCurrency(sdr.stats.total / (sdr.stats.reunioes.qualificadas + sdr.stats.reunioes.gerou_venda || 1))} / reunião
+                        {formatCurrency(sdr.stats.total / (sdr.stats.reunioes.qualificadas || 1))} / reunião
                       </div>
                       <div className="text-xs text-green-600">
                         {sdr.stats.percentualMeta.toFixed(1)}%

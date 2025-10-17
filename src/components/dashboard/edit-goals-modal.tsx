@@ -29,7 +29,7 @@ const initialGoals: GoalData[] = [
   {
     id: "comercial",
     title: "Meta Comercial",
-    value: 800000,
+    value: 0,
     description: "Meta mensal de vendas (MRR)",
     icon: DollarSign,
     color: "text-green-600"
@@ -37,7 +37,7 @@ const initialGoals: GoalData[] = [
   {
     id: "sdr",
     title: "Meta SDR",
-    value: 50,
+    value: 0,
     description: "Meta de reuniões marcadas",
     icon: Users,
     color: "text-purple-600"
@@ -56,34 +56,33 @@ export function EditGoalsModal({ trigger, variant = "button" }: EditGoalsModalPr
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Load current month meta from Supabase on mount
   useEffect(() => {
     const loadCurrentMetas = async () => {
-      if (!isSupabaseConfigured()) {
-        return // Use default values if Supabase is not configured
-      }
-
       try {
         setLoading(true)
-        
-        // Load metas in parallel (only comercial and sdr now)
+        setError(null)
+
+        // Load metas in parallel (somente do banco, sem defaults)
         const [currentMeta, currentMetaSdr] = await Promise.all([
           getCurrentMonthMeta(),
           getCurrentMonthMetaSdr()
         ])
-        
-        // Update goals with the current meta values
+
+        // Update goals with the current meta values from database
         setGoals(prev => prev.map(goal => {
-          if (goal.id === "comercial" && currentMeta?.valor_meta) {
+          if (goal.id === "comercial") {
             return { ...goal, value: currentMeta.valor_meta }
-          } else if (goal.id === "sdr" && currentMetaSdr?.valor_meta) {
+          } else if (goal.id === "sdr") {
             return { ...goal, value: currentMetaSdr.valor_meta }
           }
           return goal
         }))
       } catch (error) {
         console.error('Error loading current metas:', error)
+        setError('Erro ao carregar metas do banco de dados. Verifique a conexão.')
       } finally {
         setLoading(false)
       }
@@ -196,14 +195,14 @@ export function EditGoalsModal({ trigger, variant = "button" }: EditGoalsModalPr
           </DialogTitle>
           <DialogDescription>
             Configure as metas de desempenho da equipe
-            {!isSupabaseConfigured() && (
-              <span className="block text-xs text-amber-600 mt-1">
-                ⚠️ Modo offline - alterações não serão persistidas
+            {error && (
+              <span className="block text-xs text-red-600 mt-1">
+                ⚠️ {error}
               </span>
             )}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4 py-4">
           {goals.map((goal) => {
             const IconComponent = goal.icon

@@ -186,13 +186,18 @@ export function calculateComissaoSDR(
   const fatorCheckpoint = checkpoint === 'none' ? 0 :
                          checkpoint === 'checkpoint_1' ? 1/3 :
                          checkpoint === 'checkpoint_2' ? 2/3 : 1
-  
+
+  // Calcular reuniões que NÃO geraram venda (apenas qualificadas)
+  const reunioesSomenteQualificadas = reunioesQualificadas - reunioesGeraramVenda
+
   // Aplicar o fator do checkpoint nos valores das comissões
-  const comissaoBase = (reunioesQualificadas * config.reuniao_qualificada * fatorCheckpoint) + 
+  // Reuniões qualificadas SEM venda recebem valor de reuniao_qualificada
+  // Reuniões COM venda recebem valor de reuniao_gerou_venda (que substitui, não soma)
+  const comissaoBase = (reunioesSomenteQualificadas * config.reuniao_qualificada * fatorCheckpoint) +
                       (reunioesGeraramVenda * config.reuniao_gerou_venda * fatorCheckpoint)
-  
+
   const bonus = percentualMeta >= 100 ? config.bonus_meta_100 : 0
-  
+
   return {
     comissaoBase,
     bonus,

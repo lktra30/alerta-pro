@@ -731,49 +731,38 @@ export async function getLeadsEvolutionData() {
 // Get current month meta
 export async function getCurrentMonthMeta() {
   if (!isSupabaseConfigured() || !supabase) {
-    console.warn('Supabase not configured, using default meta values')
-    return { valor_meta: 800000, ano: 2025, mes: 7 } // Default values
+    console.error('Supabase not configured')
+    throw new Error('Supabase not configured')
   }
 
   try {
-    const currentDate = new Date()
-    const currentYear = currentDate.getFullYear()
-    const currentMonth = currentDate.getMonth() + 1
-
+    // Buscar sempre a meta do ID = 2 (meta única do dashboard)
     const { data: meta, error } = await supabase
       .from('metas')
-      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
-      .eq('ano', currentYear)
-      .eq('mes', currentMonth)
+      .select('id, valor_meta, meta_closer, meta_sdr, valor_meta_mrr, meta_reunioes_sdr')
+      .eq('id', 2)
       .single()
-    
+
     if (error) {
-      // Check if it's a "no rows" error (which is expected when no meta exists)
-      if (error.code === 'PGRST116') {
-        console.info(`No meta found for ${currentYear}/${currentMonth}, using default values`)
-      } else {
-        console.error('Supabase error fetching meta:', error.code, error.message)
-      }
-      return { valor_meta: 800000, ano: currentYear, mes: currentMonth }
+      console.error('Supabase error fetching meta ID=2:', error.code, error.message)
+      throw new Error(`Failed to fetch meta: ${error.message}`)
     }
 
     if (!meta) {
-      console.info(`No meta data returned for ${currentYear}/${currentMonth}, using default values`)
-      return { valor_meta: 800000, ano: currentYear, mes: currentMonth }
+      console.error('No meta data returned for ID=2')
+      throw new Error('Meta ID=2 not found in database')
     }
-    
-    console.log('Meta data from database:', meta)
-    console.log('Meta keys:', Object.keys(meta))
-    
-    // Return the meta object with the correct valor_meta field
+
+    console.log('Meta data from database (ID=2):', meta)
+
+    // Return the meta object from database
     return {
-      valor_meta: meta.valor_meta || 800000,
-      ano: meta.ano,
-      mes: meta.mes
+      valor_meta: meta.valor_meta,
+      id: meta.id
     }
   } catch (error) {
     console.error('Error in getCurrentMonthMeta:', error)
-    return { valor_meta: 800000, ano: 2025, mes: 7 } // Default values
+    throw error
   }
 }
 
@@ -825,49 +814,39 @@ export async function getCurrentMonthMetaCloser() {
 // Get current month meta SDR
 export async function getCurrentMonthMetaSdr() {
   if (!isSupabaseConfigured() || !supabase) {
-    console.warn('Supabase not configured, using default meta SDR values')
-    return { valor_meta: 50, ano: 2025, mes: 7 } // Default values
+    console.error('Supabase not configured')
+    throw new Error('Supabase not configured')
   }
 
   try {
-    const currentDate = new Date()
-    const currentYear = currentDate.getFullYear()
-    const currentMonth = currentDate.getMonth() + 1
-
+    // Buscar sempre a meta do ID = 2 (meta única do dashboard)
     const { data: meta, error } = await supabase
       .from('metas')
-      .select('meta_sdr, ano, mes')
-      .eq('ano', currentYear)
-      .eq('mes', currentMonth)
+      .select('id, meta_sdr, meta_reunioes_sdr')
+      .eq('id', 2)
       .single()
-    
+
     if (error) {
-      // Check if it's a "no rows" error (which is expected when no meta exists)
-      if (error.code === 'PGRST116') {
-        console.info(`No meta SDR found for ${currentYear}/${currentMonth}, using default values`)
-      } else {
-        console.error('Supabase error fetching meta SDR:', error.code, error.message)
-      }
-      return { valor_meta: 50, ano: currentYear, mes: currentMonth }
+      console.error('Supabase error fetching meta SDR (ID=2):', error.code, error.message)
+      throw new Error(`Failed to fetch meta SDR: ${error.message}`)
     }
 
     if (!meta) {
-      console.info(`No meta SDR data returned for ${currentYear}/${currentMonth}, using default values`)
-      return { valor_meta: 50, ano: currentYear, mes: currentMonth }
+      console.error('No meta SDR data returned for ID=2')
+      throw new Error('Meta SDR ID=2 not found in database')
     }
-    
+
     return {
-      valor_meta: meta.meta_sdr || 50,
-      ano: meta.ano,
-      mes: meta.mes
+      valor_meta: meta.meta_reunioes_sdr || meta.meta_sdr,
+      id: meta.id
     }
   } catch (error) {
     console.error('Error in getCurrentMonthMetaSdr:', error)
-    return { valor_meta: 50, ano: 2025, mes: 7 } // Default values
+    throw error
   }
 }
 
-// Function to create or update meta
+// Function to update meta (sempre atualiza ID = 2)
 export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
   if (!isSupabaseConfigured() || !supabase) {
     console.warn('Supabase not configured. Using local state only.')
@@ -875,58 +854,23 @@ export async function upsertMeta(ano: number, mes: number, valor_meta: number) {
   }
 
   try {
-    // Test if the table exists and is accessible
-    const { error: testError } = await supabase
-      .from('metas')
-      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
-      .limit(1)
-    
-    if (testError) {
-      console.error('Error accessing metas table:', testError)
-      return { success: false, error: `Table access error: ${testError.message}` }
-    }
+    console.log('Updating meta ID=2 with valor_meta:', valor_meta)
 
-    // First try to update existing record
-    const { data: existingMeta, error: fetchError } = await supabase
-      .from('metas')
-      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
-      .eq('ano', ano)
-      .eq('mes', mes)
-      .single()
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching existing meta:', fetchError)
-      return { success: false, error: fetchError.message }
-    }
-
-    const upsertData = {
-      ano,
-      mes,
-      valor_meta: valor_meta,
-      meta_closer: existingMeta?.meta_closer || 0,
-      meta_sdr: existingMeta?.meta_sdr || 0
-    }
-
-    console.log('Upserting meta with data:', upsertData)
-
+    // Atualizar diretamente o ID = 2
     const { data, error } = await supabase
       .from('metas')
-      .upsert(upsertData, {
-        onConflict: 'ano,mes'
-      })
-      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
+      .update({ valor_meta: valor_meta })
+      .eq('id', 2)
+      .select('id, valor_meta, meta_closer, meta_sdr, valor_meta_mrr, meta_reunioes_sdr')
       .single()
 
     if (error) {
-      console.error('Error upserting meta - Full error object:', JSON.stringify(error, null, 2))
-      console.error('Error upserting meta - Error type:', typeof error)
-      console.error('Error upserting meta - Error keys:', Object.keys(error))
-      console.error('Error upserting meta - Upsert data:', upsertData)
-      
+      console.error('Error updating meta ID=2:', JSON.stringify(error, null, 2))
       const errorMessage = error.message || 'Unknown database error - check console for details'
       return { success: false, error: errorMessage }
     }
 
+    console.log('Meta ID=2 updated successfully:', data)
     return { success: true, data }
   } catch (error) {
     console.error('Error in upsertMeta:', error)
@@ -992,7 +936,7 @@ export async function upsertMetaCloser(ano: number, mes: number, valor_meta: num
   }
 }
 
-// Function to create or update meta SDR
+// Function to update meta SDR (sempre atualiza ID = 2)
 export async function upsertMetaSdr(ano: number, mes: number, valor_meta: number) {
   if (!isSupabaseConfigured() || !supabase) {
     console.warn('Supabase not configured. Using local state only.')
@@ -1000,49 +944,28 @@ export async function upsertMetaSdr(ano: number, mes: number, valor_meta: number
   }
 
   try {
-    // First try to update existing record
-    const { data: existingMeta, error: fetchError } = await supabase
-      .from('metas')
-      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
-      .eq('ano', ano)
-      .eq('mes', mes)
-      .single()
+    console.log('Updating meta SDR ID=2 with meta_reunioes_sdr:', valor_meta)
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching existing meta:', fetchError)
-      return { success: false, error: fetchError.message }
-    }
-
-    const upsertData = {
-      ano,
-      mes,
-      valor_meta: existingMeta?.valor_meta || 0,
-      meta_closer: existingMeta?.meta_closer || 0,
-      meta_sdr: valor_meta
-    }
-
-    console.log('Upserting meta SDR with data:', upsertData)
-
+    // Atualizar diretamente o ID = 2
     const { data, error } = await supabase
       .from('metas')
-      .upsert(upsertData, {
-        onConflict: 'ano,mes'
-      })
-      .select('id, ano, mes, valor_meta, meta_closer, meta_sdr')
+      .update({ meta_reunioes_sdr: valor_meta })
+      .eq('id', 2)
+      .select('id, valor_meta, meta_closer, meta_sdr, valor_meta_mrr, meta_reunioes_sdr')
       .single()
 
     if (error) {
-      console.error('Error upserting meta SDR:', {
+      console.error('Error updating meta SDR ID=2:', {
         error,
         errorMessage: error.message,
         errorCode: error.code,
         errorDetails: error.details,
-        errorHint: error.hint,
-        upsertData
+        errorHint: error.hint
       })
       return { success: false, error: error.message || 'Unknown database error' }
     }
 
+    console.log('Meta SDR ID=2 updated successfully:', data)
     return { success: true, data }
   } catch (error) {
     console.error('Error in upsertMetaSdr:', error)

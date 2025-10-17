@@ -660,7 +660,7 @@ export function DashboardContent() {
 
       {/* Rankings (Filtráveis por Período) - Responsivo */}
       <div className="overflow-hidden">
-        <RankingCards />
+        <RankingCards startDate={calculateDateRange().startDate} endDate={calculateDateRange().endDate} />
       </div>
 
       {/* Separador Visual */}
