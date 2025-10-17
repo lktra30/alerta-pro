@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Settings, DollarSign, Users, TrendingUp, Calendar } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 import { PeriodoFiltro } from "@/components/ui/date-range-filter"
-import { getColaboradores, getAllClientes, getAllReunioes } from "@/lib/supabase"
+import { getColaboradores, getAllClientes, getAllReunioes, getCurrentMonthMeta } from "@/lib/supabase"
 import { 
   getNovaComissaoConfig, 
   calculateComissaoSDRFromClientes,
@@ -65,25 +65,15 @@ export function ComissaoPage() {
     setCustomDateRange(range)
   }
 
-  const getMetas = () => {
-    const savedConfig = localStorage.getItem('comissao_metas')
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig)
-        return {
-          meta_sdr: config.meta_sdr || 50,
-          meta_closer: config.meta_closer || 15000
-        }
-      } catch (error) {
-        console.error('Error loading metas:', error)
-      }
-    }
-    return { meta_sdr: 50, meta_closer: 15000 }
-  }
-
   const calculateAllComissoes = useCallback(async (colaboradoresData: Colaborador[], clientesData: Cliente[], reunioesData: any[]) => {
     const config = getNovaComissaoConfig()
-    const metas = getMetas()
+
+    // Buscar metas do banco (ID = 2) - SEM valores default
+    const metaData = await getCurrentMonthMeta()
+    const metas = {
+      meta_sdr: metaData.meta_reunioes_sdr || metaData.meta_sdr,
+      meta_closer: metaData.valor_meta_mrr || metaData.meta_closer
+    }
     
     let clientesFiltrados = clientesData
     let reunioesFiltradas = reunioesData
